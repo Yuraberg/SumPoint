@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SumPoint — Умный дайджест Telegram</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Telegram Login Widget script -->
+  <script async src="https://telegram.org/js/telegram-widget.js?22"
+          data-telegram-login="YOUR_BOT_USERNAME"
+          data-size="large"
+          data-auth-url="/api/v1/auth/telegram"
+          data-request-access="write"></script>
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="logo">📡 SumPoint</div>
+    <div id="user-bar">
+      <span id="user-name"></span>
+      <button id="logout-btn" class="btn btn-ghost" style="display:none">Выйти</button>
+    </div>
+  </header>
+
+  <!-- ── Login screen ───────────────────────────────────────────────────────── -->
+  <section id="login-screen" class="center-screen">
+    <h1>Умный дайджест ваших Telegram-каналов</h1>
+    <p class="subtitle">Войдите через Telegram, чтобы начать</p>
+    <div id="tg-login-placeholder"></div>
+  </section>
+
+  <!-- ── App shell ──────────────────────────────────────────────────────────── -->
+  <main id="app" style="display:none">
+    <!-- Category filter pills -->
+    <nav class="category-bar">
+      <button class="pill active" data-cat="">Все</button>
+      <button class="pill" data-cat="Market">📈 Рынок</button>
+      <button class="pill" data-cat="Technology">💻 Технологии</button>
+      <button class="pill" data-cat="Shopping">🛍 Шопинг</button>
+      <button class="pill" data-cat="Events">🗓 События</button>
+      <button class="pill" data-cat="Politics">🏛 Политика</button>
+      <button class="pill" data-cat="Entertainment">🎬 Развлечения</button>
+    </nav>
+
+    <div class="layout">
+      <!-- ── News feed ──────────────────────────────────────────────────────── -->
+      <section class="feed-col">
+        <div class="section-header">
+          <h2>Лента</h2>
+          <div class="search-box">
+            <input id="search-input" type="text" placeholder="🔍 Семантический поиск…" />
+            <button id="search-btn" class="btn btn-primary btn-sm">Найти</button>
+          </div>
+        </div>
+        <div id="feed" class="feed"></div>
+        <div id="feed-loader" class="loader" style="display:none">Загрузка…</div>
+      </section>
+
+      <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+      <aside class="sidebar">
+        <!-- Calendar widget -->
+        <div class="card">
+          <h3>📅 Предстоящие события</h3>
+          <ul id="events-list" class="events-list"></ul>
+        </div>
+
+        <!-- Digest controls -->
+        <div class="card">
+          <h3>📋 Дайджест</h3>
+          <button id="gen-digest-btn" class="btn btn-primary w-full">Сгенерировать сейчас</button>
+          <div id="digest-box" class="digest-box" style="display:none"></div>
+        </div>
+
+        <!-- Prompt editor -->
+        <div class="card collapsible">
+          <h3 class="collapsible-toggle">✏️ Редактор промптов ▾</h3>
+          <div class="collapsible-body" style="display:none">
+            <label>Промпт суммаризации</label>
+            <textarea id="prompt-editor" rows="6" placeholder="Настройте промпт…"></textarea>
+            <button class="btn btn-secondary w-full" id="save-prompt-btn">Сохранить</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
