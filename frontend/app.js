@@ -87,8 +87,7 @@ async function onTelegramAuth(data) {
     if (!resp.ok) throw new Error("Auth failed");
     const { access_token } = await resp.json();
     setToken(access_token);
-    document.getElementById("user-name").textContent = data.first_name || "";
-    showApp();
+    location.reload();
   } catch (e) {
     alert("Ошибка входа: " + e.message);
   }

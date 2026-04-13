@@ -10,7 +10,7 @@ import hmac
 import time
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -71,6 +71,32 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+@router.get("/telegram")
+async def telegram_login_get(
+    id: int = Query(...),
+    first_name: str = Query(...),
+    auth_date: int = Query(...),
+    hash: str = Query(...),
+    last_name: str | None = Query(None),
+    username: str | None = Query(None),
+    photo_url: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    data = TelegramAuthData(
+        id=id, first_name=first_name, last_name=last_name,
+        username=username, photo_url=photo_url, auth_date=auth_date, hash=hash,
+    )
+    if not _verify_telegram_hash(data):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
+    user = (await db.execute(select(User).where(User.id == data.id))).scalar_one_or_none()
+    if not user:
+        user = User(id=data.id, first_name=data.first_name, last_name=data.last_name, username=data.username)
+        db.add(user)
+        await db.flush()
+    token = _create_jwt(user.id)
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/telegram")
