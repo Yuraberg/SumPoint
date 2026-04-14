@@ -40,7 +40,7 @@ def _content_hash(text: str) -> str:
 
 
 class TelegramIngestion:
-    def __init__(self, user_id: int, session_path: str):
+    def __init__(self, user_id: int, session_path: str = ""):
         self._user_id = user_id
         self._session_path = session_path
         self._client: TelegramClient | None = None
@@ -64,12 +64,13 @@ class TelegramIngestion:
     async def _get_client(self) -> TelegramClient:
         if self._client and self._client.is_connected():
             return self._client
-        session_str = self._load_session_string()
+        # Prefer env variable (Coolify), fallback to encrypted file
+        session_str = settings.telegram_session_string or self._load_session_string()
         session = StringSession(session_str) if session_str else StringSession()
         client = TelegramClient(session, settings.telegram_api_id, settings.telegram_api_hash)
         await client.start()
-        # Persist updated session
-        self._save_session_string(client.session.save())
+        if not settings.telegram_session_string:
+            self._save_session_string(client.session.save())
         self._client = client
         return client
 

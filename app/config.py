@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Telegram User API
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
+    telegram_session_string: str = ""
 
     # Telegram Bot
     telegram_bot_token: str = ""
