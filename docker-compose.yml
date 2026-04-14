@@ -5,12 +5,12 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sumpoint}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sumpoint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-sumpoint}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sumpoint"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sumpoint}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,41 +25,57 @@ services:
 
   api:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    ports:
-      - "8001:8000"
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - sessions:/app/sessions
 
   worker:
     build: .
     command: celery -A app.tasks.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - sessions:/app/sessions
 
   beat:
     build: .
     command: celery -A app.tasks.celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:
       - redis
 
   bot:
     build: .
     command: python -m bot.bot
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
-  sessions:
