@@ -34,4 +34,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.digest_tasks.fetch_all_channels",
         "schedule": 300.0,  # every 5 minutes
     },
+    "check-schedules": {
+        "task": "app.tasks.digest_tasks.check_and_run_schedules",
+        "schedule": 60.0,  # every minute
+    },
 }

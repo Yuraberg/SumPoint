@@ -3,9 +3,9 @@ from datetime import datetime
 
 
 class ChannelCreate(BaseModel):
-    telegram_id: int
+    telegram_id: int = 0       # 0 means resolve by username
     username: str | None = None
-    title: str
+    title: str = ""
 
 
 class ChannelOut(BaseModel):

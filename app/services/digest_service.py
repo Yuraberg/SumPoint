@@ -1,5 +1,5 @@
 """Build daily digest from stored posts."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,33 +9,50 @@ from app.prompts.summarization import build_digest_prompt
 from app.services.ai_engine import _call
 
 
-async def build_user_digest(db: AsyncSession, user_id: int, hours: int = 24) -> dict:
-    """Collect recent posts for a user and produce a markdown digest."""
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+async def build_user_digest(
+    db: AsyncSession,
+    user_id: int,
+    hours: int = 24,
+    categories: list[str] | None = None,
+    model: str | None = None,
+) -> dict:
+    """Collect recent posts for a user and produce a markdown digest.
+
+    categories — if provided, only include posts whose category is in this list.
+    model      — DeepSeek model name; None defaults to deepseek-chat.
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
 
     stmt = (
         select(Post, Channel.title.label("channel_title"))
         .join(Channel, Post.channel_id == Channel.id)
         .where(Channel.user_id == user_id)
         .where(Post.published_at >= cutoff)
-        .where(Post.is_ad == False)          # noqa: E712
-        .where(Post.summary != None)         # noqa: E711
+        .where(Post.is_ad == False)       # noqa: E712
+        .where(Post.summary != None)      # noqa: E711
         .order_by(Post.published_at.desc())
     )
+    if categories:
+        stmt = stmt.where(Post.category.in_(categories))
+
     rows = (await db.execute(stmt)).all()
 
     if not rows:
-        return {"generated_at": datetime.utcnow(), "user_id": user_id, "posts": [], "events": []}
+        return {"generated_at": datetime.utcnow(), "user_id": user_id, "posts": [], "events": [],
+                "digest_markdown": None}
 
     summaries = [
-        {"channel": row.channel_title, "summary": row.Post.summary or "", "category": row.Post.category or "Other"}
+        {
+            "channel": row.channel_title,
+            "summary": row.Post.summary or "",
+            "category": row.Post.category or "Other",
+        }
         for row in rows
     ]
 
-    digest_text = _call(build_digest_prompt(summaries), max_tokens=1024)
+    digest_text = _call(build_digest_prompt(summaries), max_tokens=1024, model=model)
 
-    # Collect all events
-    all_events = []
+    all_events: list = []
     for row in rows:
         if row.Post.events:
             all_events.extend(row.Post.events)

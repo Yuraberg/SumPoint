@@ -13,6 +13,8 @@ class PostOut(BaseModel):
     category: str | None
     is_ad: bool
     events: Any | None
+    channel_username: str | None = None
+    channel_title: str | None = None
 
     model_config = {"from_attributes": True}
 

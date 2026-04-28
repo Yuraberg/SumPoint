@@ -49,3 +49,4 @@ htmlcov/
 
 # Alembic (keep structure, ignore generated)
 alembic/versions/*.pyc
+.gstack/

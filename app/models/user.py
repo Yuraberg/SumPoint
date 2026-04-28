@@ -22,3 +22,5 @@ class User(Base):
     session_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     channels: Mapped[list["Channel"]] = relationship("Channel", back_populates="user", cascade="all, delete-orphan")
+    schedules: Mapped[list["DigestSchedule"]] = relationship("DigestSchedule", back_populates="user", cascade="all, delete-orphan")
+    schedules_v2: Mapped[list["Schedule"]] = relationship("Schedule", back_populates="user", cascade="all, delete-orphan")

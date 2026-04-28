@@ -3,85 +3,331 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SumPoint — Умный дайджест Telegram</title>
+  <title>SumPoint</title>
   <link rel="stylesheet" href="style.css" />
-
 </head>
 <body>
-  <!-- ── Header ─────────────────────────────────────────────────────────────── -->
-  <header class="header">
-    <div class="logo">📡 SumPoint</div>
-    <div id="user-bar">
-      <span id="user-name"></span>
-      <button id="logout-btn" class="btn btn-ghost" style="display:none">Выйти</button>
-    </div>
-  </header>
 
-  <!-- ── Login screen ───────────────────────────────────────────────────────── -->
-  <section id="login-screen" class="center-screen">
-    <h1>Умный дайджест ваших Telegram-каналов</h1>
-    <p class="subtitle">Войдите через Telegram, чтобы начать</p>
-    <script async src="https://telegram.org/js/telegram-widget.js?22"
-            data-telegram-login="SumProcPointBot"
-            data-size="large"
-            data-onauth="onTelegramAuth(user)"
-            data-request-access="write"></script>
+  <!-- Login -->
+  <section id="login-screen" class="login-screen" style="display:none">
+    <div class="login-card">
+      <div class="login-logo">SumPoint</div>
+      <h1>Умный дайджест Telegram</h1>
+      <p>Войдите через Telegram, чтобы начать</p>
+      <script async src="https://telegram.org/js/telegram-widget.js?22"
+              data-telegram-login="SumProcPointBot"
+              data-size="large"
+              data-onauth="onTelegramAuth(user)"
+              data-request-access="write"></script>
+    </div>
   </section>
 
-  <!-- ── App shell ──────────────────────────────────────────────────────────── -->
-  <main id="app" style="display:none">
-    <!-- Category filter pills -->
-    <nav class="category-bar">
-      <button class="pill active" data-cat="">Все</button>
-      <button class="pill" data-cat="Market">📈 Рынок</button>
-      <button class="pill" data-cat="Technology">💻 Технологии</button>
-      <button class="pill" data-cat="Shopping">🛍 Шопинг</button>
-      <button class="pill" data-cat="Events">🗓 События</button>
-      <button class="pill" data-cat="Politics">🏛 Политика</button>
-      <button class="pill" data-cat="Entertainment">🎬 Развлечения</button>
-    </nav>
+  <!-- App -->
+  <div id="app" class="app-shell" style="display:none">
 
-    <div class="layout">
-      <!-- ── News feed ──────────────────────────────────────────────────────── -->
-      <section class="feed-col">
-        <div class="section-header">
-          <h2>Лента</h2>
-          <div class="search-box">
-            <input id="search-input" type="text" placeholder="🔍 Семантический поиск…" />
-            <button id="search-btn" class="btn btn-primary btn-sm">Найти</button>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">SumPoint</div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Инфополе</div>
+        <a href="#" class="nav-item" data-page="posts">
+          <span class="nav-icon">&#9783;</span> Посты
+        </a>
+        <a href="#" class="nav-item" data-page="digest">
+          <span class="nav-icon">&#9776;</span> Сводки
+        </a>
+        <a href="#" class="nav-item" data-page="events">
+          <span class="nav-icon">&#9737;</span> События
+        </a>
+
+        <div class="nav-section-label" style="margin-top:16px">Управление</div>
+        <a href="#" class="nav-item" data-page="schedule">
+          <span class="nav-icon">&#9201;</span> Расписание
+        </a>
+        <a href="#" class="nav-item" data-page="channels">
+          <span class="nav-icon">&#9432;</span> Каналы
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="sidebar-user" class="sidebar-user"></div>
+        <button id="logout-btn" class="sidebar-logout">Выйти</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+
+      <!-- ПОСТЫ -->
+      <div class="page" id="page-posts">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">ПОСТЫ</h1>
+            <p class="page-subtitle">Все собранные посты из Telegram-каналов</p>
           </div>
         </div>
-        <div id="feed" class="feed"></div>
-        <div id="feed-loader" class="loader" style="display:none">Загрузка…</div>
-      </section>
 
-      <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
-      <aside class="sidebar">
-        <!-- Calendar widget -->
-        <div class="card">
-          <h3>📅 Предстоящие события</h3>
-          <ul id="events-list" class="events-list"></ul>
+        <div class="filters-bar">
+          <div class="filter-group">
+            <label>ДАТА ОТ</label>
+            <input type="date" id="filter-date-from" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label>ДАТА ДО</label>
+            <input type="date" id="filter-date-to" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label>ТЕМЫ</label>
+            <select id="filter-category" class="filter-select">
+              <option value="">Все темы</option>
+              <option value="Market">Market</option>
+              <option value="Technology">Technology</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Events">Events</option>
+              <option value="Politics">Politics</option>
+              <option value="Science">Science</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Personal">Personal</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>КАНАЛЫ</label>
+            <select id="filter-channel" class="filter-select">
+              <option value="">Все каналы</option>
+            </select>
+          </div>
+          <div class="filter-search">
+            <input type="text" id="search-input" placeholder="Поиск..." class="filter-input search-input" />
+            <button id="search-btn" class="btn-search">Найти</button>
+          </div>
         </div>
 
-        <!-- Digest controls -->
-        <div class="card">
-          <h3>📋 Дайджест</h3>
-          <button id="gen-digest-btn" class="btn btn-primary w-full">Сгенерировать сейчас</button>
+        <div class="table-container">
+          <table class="posts-table">
+            <thead>
+              <tr>
+                <th class="col-channel">КАНАЛ</th>
+                <th class="col-dots">О</th>
+                <th class="col-post">ПОСТ</th>
+                <th class="col-topics">ТЕМЫ</th>
+                <th class="col-date"></th>
+              </tr>
+            </thead>
+            <tbody id="posts-tbody"></tbody>
+          </table>
+          <div id="feed-loader" class="table-message" style="display:none">Загрузка…</div>
+          <div id="no-posts" class="table-message" style="display:none">
+            Нет постов. Добавьте каналы и нажмите «Синхронизировать» на странице Каналы.
+          </div>
+        </div>
+      </div>
+
+      <!-- СВОДКИ -->
+      <div class="page" id="page-digest">
+        <div class="page-header">
+          <h1 class="page-title">СВОДКИ</h1>
+          <p class="page-subtitle">Ежедневный дайджест ваших каналов</p>
+        </div>
+        <div class="digest-page">
+          <button id="gen-digest-btn" class="btn-primary">Сгенерировать сводку</button>
           <div id="digest-box" class="digest-box" style="display:none"></div>
         </div>
+      </div>
 
-        <!-- Prompt editor -->
-        <div class="card collapsible">
-          <h3 class="collapsible-toggle">✏️ Редактор промптов ▾</h3>
-          <div class="collapsible-body" style="display:none">
-            <label>Промпт суммаризации</label>
-            <textarea id="prompt-editor" rows="6" placeholder="Настройте промпт…"></textarea>
-            <button class="btn btn-secondary w-full" id="save-prompt-btn">Сохранить</button>
+      <!-- СОБЫТИЯ -->
+      <div class="page" id="page-events">
+        <div class="page-header">
+          <h1 class="page-title">СОБЫТИЯ</h1>
+          <p class="page-subtitle">События, найденные в Telegram-каналах</p>
+        </div>
+
+        <div class="filters-bar">
+          <div class="filter-group">
+            <label>ДАТА ОТ</label>
+            <input type="date" id="ev-date-from" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label>ДАТА ДО</label>
+            <input type="date" id="ev-date-to" class="filter-input" />
+          </div>
+          <div class="filter-group">
+            <label>ТЕМЫ</label>
+            <select id="ev-filter-topic" class="filter-select">
+              <option value="">Все темы</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>ТИП СОБЫТИЯ</label>
+            <select id="ev-filter-type" class="filter-select">
+              <option value="">Все типы</option>
+              <option value="конференция">Конференция</option>
+              <option value="митап">Митап</option>
+              <option value="вебинар">Вебинар</option>
+              <option value="воркшоп">Воркшоп</option>
+              <option value="выставка">Выставка</option>
+              <option value="концерт">Концерт</option>
+              <option value="спектакль">Спектакль</option>
+              <option value="дегустация">Дегустация</option>
+              <option value="форум">Форум</option>
+              <option value="фестиваль">Фестиваль</option>
+              <option value="курс">Курс</option>
+              <option value="другое">Другое</option>
+            </select>
+          </div>
+          <button id="ev-reset-btn" class="btn-ghost-sm">Сбросить</button>
+        </div>
+
+        <div class="table-container">
+          <table class="events-table">
+            <thead>
+              <tr>
+                <th class="evcol-date">ДАТА</th>
+                <th class="evcol-name">НАЗВАНИЕ</th>
+                <th class="evcol-topics">ТЕМЫ</th>
+                <th class="evcol-type">ТИП</th>
+                <th class="evcol-location">МЕСТО</th>
+                <th class="evcol-speakers">СПИКЕРЫ</th>
+                <th class="evcol-partners">ПАРТНЁРЫ</th>
+                <th class="evcol-mentions">УПОМИНАНИЯ</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody"></tbody>
+          </table>
+          <div id="events-loader" class="table-message" style="display:none">Загрузка…</div>
+          <div id="no-events" class="table-message" style="display:none">Событий не найдено.</div>
+        </div>
+      </div>
+
+      <!-- РАСПИСАНИЕ -->
+      <div class="page" id="page-schedule">
+        <div class="page-header sched-page-header">
+          <div>
+            <h1 class="page-title">РАСПИСАНИЕ</h1>
+            <p class="page-subtitle">Автоматический сбор и генерация сводок</p>
+          </div>
+          <button class="btn-primary" onclick="openSchedModal()">+ Создать расписание</button>
+        </div>
+
+        <div class="table-container">
+          <table class="posts-table sched-table">
+            <thead>
+              <tr>
+                <th class="scol-name">НАЗВАНИЕ</th>
+                <th class="scol-type">ТИПЫ</th>
+                <th class="scol-cron">РАСПИСАНИЕ</th>
+                <th class="scol-topics">ТЕМЫ</th>
+                <th class="scol-status">СТАТУС</th>
+                <th class="scol-last">ПОСЛЕДНИЙ ЗАПУСК</th>
+                <th class="scol-act"></th>
+              </tr>
+            </thead>
+            <tbody id="sched-tbody"></tbody>
+          </table>
+          <div id="sched-loader" class="table-message" style="display:none">Загрузка…</div>
+          <div id="sched-empty" class="table-message" style="display:none">
+            Нет расписаний. Нажмите «Создать расписание».
           </div>
         </div>
-      </aside>
-    </div>
-  </main>
+      </div>
+
+      <!-- CREATE SCHEDULE MODAL -->
+      <div id="sched-modal" class="modal-backdrop" style="display:none" onclick="closeSchedModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h2 class="modal-title">Новое расписание</h2>
+            <button class="modal-close" onclick="closeSchedModal()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Название</label>
+              <input id="m-name" type="text" class="filter-input" style="width:100%" placeholder="AI. в 9:00 каждый день" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Тип</label>
+              <div class="type-btns">
+                <button class="type-btn active" data-type="topics" onclick="selectType(this)">Темы</button>
+                <button class="type-btn" data-type="events" onclick="selectType(this)">События</button>
+                <button class="type-btn" data-type="collect" onclick="selectType(this)">Сбор</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Расписание</label>
+              <select id="m-cron-preset" class="filter-select" style="width:100%" onchange="onPresetChange(this)">
+                <option value="0 9 * * *">Каждый день в 09:00</option>
+                <option value="0 12 * * *">Каждый день в 12:00</option>
+                <option value="0 21 * * *">Каждый день в 21:00</option>
+                <option value="0 */6 * * *">Каждые 6 часов</option>
+                <option value="0 * * * *">Каждый час</option>
+                <option value="*/30 * * * *">Каждые 30 минут</option>
+                <option value="custom">Произвольное (cron)…</option>
+              </select>
+              <input id="m-cron-custom" type="text" class="filter-input" style="width:100%;margin-top:6px;display:none" placeholder="0 9 * * *" />
+            </div>
+
+            <div id="m-topics-section" class="form-group">
+              <label class="form-label">Глубина сбора</label>
+              <div class="sched-radio-row">
+                <label class="sched-radio"><input type="radio" name="m-hours" value="24" checked /> 24 часа</label>
+                <label class="sched-radio"><input type="radio" name="m-hours" value="72" /> 72 часа</label>
+                <label class="sched-radio"><input type="radio" name="m-hours" value="168" /> 7 дней</label>
+              </div>
+
+              <label class="form-label" style="margin-top:12px">Модель LLM</label>
+              <select id="m-model" class="filter-select" style="width:100%">
+                <option value="deepseek-chat">deepseek-chat (Fast)</option>
+                <option value="deepseek-reasoner">deepseek-reasoner (Deep)</option>
+              </select>
+
+              <label class="form-label" style="margin-top:12px">Темы постов <span class="sched-hint">(пусто = все)</span></label>
+              <div class="sched-categories" id="m-categories">
+                <label class="cat-check"><input type="checkbox" value="Market" /> Market</label>
+                <label class="cat-check"><input type="checkbox" value="Technology" /> Technology</label>
+                <label class="cat-check"><input type="checkbox" value="Shopping" /> Shopping</label>
+                <label class="cat-check"><input type="checkbox" value="Events" /> Events</label>
+                <label class="cat-check"><input type="checkbox" value="Politics" /> Politics</label>
+                <label class="cat-check"><input type="checkbox" value="Science" /> Science</label>
+                <label class="cat-check"><input type="checkbox" value="Entertainment" /> Entertainment</label>
+                <label class="cat-check"><input type="checkbox" value="Personal" /> Personal</label>
+                <label class="cat-check"><input type="checkbox" value="Other" /> Other</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeSchedModal()">Отмена</button>
+            <button class="btn-primary" onclick="createSchedule()">Создать</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- КАНАЛЫ -->
+      <div class="page" id="page-channels">
+        <div class="page-header">
+          <h1 class="page-title">КАНАЛЫ</h1>
+          <p class="page-subtitle">Управление источниками данных</p>
+        </div>
+        <div class="channels-page">
+          <div class="channels-actions">
+            <div class="add-channel-row">
+              <input id="channel-input" type="text" placeholder="@username или числовой ID канала" class="filter-input add-input" />
+              <button id="add-channel-btn" class="btn-primary">Добавить</button>
+            </div>
+            <div class="channels-btns">
+              <button id="import-btn" class="btn-secondary">Импортировать мои каналы</button>
+              <button id="sync-btn" class="btn-secondary">Синхронизировать</button>
+            </div>
+          </div>
+          <ul id="channels-list" class="channels-list"></ul>
+        </div>
+      </div>
+
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>

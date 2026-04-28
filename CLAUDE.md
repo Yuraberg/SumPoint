@@ -28,6 +28,7 @@ python -m bot.bot
 ### Full Docker deployment
 ```bash
 docker compose up -d
+# App is exposed on port 8001 (mapped to container's 8000)
 ```
 
 ### Database migrations
@@ -37,33 +38,66 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
+### Generate Telethon session string (run once locally before Coolify deploy)
+```bash
+pip install telethon
+python generate_session.py
+# Outputs TELEGRAM_SESSION_STRING — paste it into Coolify env vars
+```
+
 ## Architecture
 
 ### Request flow
-The FastAPI app (`app/main.py`) mounts the frontend SPA at `/` and registers all routers under `/api/v1/` via `app/api/router.py`. All API routes except `POST /auth/telegram` require a Bearer JWT token verified by `get_current_user()` in `app/api/auth.py`.
+`app/main.py` runs FastAPI, mounts the frontend SPA at `/`, registers all routers under `/api/v1/` via `app/api/router.py`. All routes except `POST /auth/telegram` require a Bearer JWT verified by `get_current_user()` in `app/api/auth.py`.
+
+### API endpoints
+- `GET|POST /auth/telegram` — Telegram Login Widget HMAC verification, returns 7-day JWT
+- `GET|POST|DELETE /channels/` — list, add, remove channels
+- `POST /channels/import` — imports user's Telegram subscriptions via Celery worker
+- `POST /channels/sync` — triggers background fetch (Celery), returns 202
+- `GET /posts/` — paginated feed; query params: `category`, `channel_id`, `date_from`, `date_to` (ISO dates), `limit`, `offset`
+- `GET /posts/search` — ILIKE text search (pgvector `embedding` column is a zero-vector stub)
+- `GET /digest/` — builds and returns a markdown digest for the last N hours
+- `GET /digest/events` — upcoming calendar events extracted from stored posts
 
 ### Post processing pipeline
-New posts flow through three stages coordinated by the Celery worker:
-1. **Ingestion** (`app/services/telegram_ingestion.py`) — Telethon fetches raw messages, pre-filters ads by keyword heuristics, deduplicates by SHA-256 content hash.
-2. **AI processing** (`app/services/ai_engine.py`) — Each post goes through `process_post()` which calls Claude three times in sequence: classify → summarize → extract events. All three calls use `claude-opus-4-6` with adaptive thinking (think blocks stripped before parsing). Event extraction returns structured JSON parsed via regex.
-3. **Storage** — Processed posts (with category, summary, events JSON, placeholder embedding) are written to the `posts` table.
+New posts flow through the Celery worker only (never the API container):
 
-The `fetch_all_channels` Celery task runs every 5 minutes and drives this entire pipeline for all active users.
+1. **Ingestion** (`app/services/telegram_ingestion.py`) — Telethon fetches raw messages, pre-filters ads by keyword heuristics, deduplicates by SHA-256 content hash.
+2. **AI processing** (`app/services/ai_engine.py`) — `process_post()` calls DeepSeek three times: `classify_post()` → `summarise_post()` → `extract_events()`. Uses `deepseek-chat` via the OpenAI SDK (`base_url="https://api.deepseek.com"`). `<thought>` blocks are stripped by regex before parsing. `generate_embedding()` returns a placeholder zero-vector (1536 dims).
+3. **Storage** — Processed posts written to the `posts` table with `category`, `summary`, `events` (JSON), placeholder `embedding`.
+
+`fetch_all_channels` Celery task runs every 5 minutes. Commits per channel inside a try/except so one failing channel doesn't block others. Users without `session_path` AND without `TELEGRAM_SESSION_STRING` are skipped.
+
+### Telethon session: worker-only rule
+**Telethon (User API) must only run inside the Celery worker.** Running it from the API container simultaneously causes `AuthKeyDuplicatedError` because Telegram detects two different IP addresses using the same session. The API container resolves this by dispatching all Telethon operations to the worker via Celery tasks (`import_channels_for_user`, `resolve_channel_username`, `fetch_all_channels`) using `run_in_threadpool` + `.apply_async().get(timeout=...)`.
+
+### Telethon session management
+Two modes, tried in order:
+1. **Env var** (`TELEGRAM_SESSION_STRING`) — preferred for Coolify/Docker deploys. Generated once by `generate_session.py`. No file I/O.
+2. **Encrypted file** — fallback. AES-256-GCM via `app/services/encryption.py` using `SESSION_ENCRYPTION_KEY`. Path stored in `User.session_path`. Stored in the `sessions/` volume. Never commit `.session` files.
 
 ### Scheduled digests
-`send_scheduled_digests(slot)` runs twice daily (morning/evening UTC hours from env). It queries users by their `digest_morning`/`digest_evening` preference flags, builds a markdown digest via `app/services/digest_service.py`, then sends it via the Telegram bot directly using `bot.send_message`.
+`send_scheduled_digests(slot)` runs twice daily. Queries users by `digest_morning`/`digest_evening` flags, builds digest via `app/services/digest_service.py`, sends via `python-telegram-bot` using `bot.send_message`.
 
-### Frontend auth
-The frontend SPA (`frontend/`) authenticates via the Telegram Login Widget. On callback, `onTelegramAuth(user)` in `app.js` POSTs widget data to `/api/v1/auth/telegram`, which verifies the HMAC-SHA256 signature and auth_date freshness (< 24h), upserts the user, and returns a 7-day JWT stored in `localStorage` as `sp_token`.
+### Telegram bot
+`bot/bot.py` uses PTB (not Telethon). Handlers split into `bot/handlers/`: `start.py`, `digest.py`, `settings.py`. Handles `/start`, and callback queries: `digest_now`, `events`, `settings`, `toggle_morning`, `toggle_evening`, `filter_<category>`.
 
-### Semantic search
-`GET /posts/search` currently uses a PostgreSQL `ILIKE` fallback. The `embedding` column (pgvector `Vector(1536)`) is populated with placeholder zeros — `generate_embedding()` in `ai_engine.py` is the stub to replace with a real embeddings model (e.g., OpenAI `text-embedding-3-small`).
+### Frontend
+Vanilla JS SPA (`frontend/`). Layout: dark sidebar with page navigation + light main content. Pages: **Посты** (posts table with date/channel/category filters + expandable rows), **Сводки** (digest), **События** (events), **Каналы** (channel management). Auth via Telegram Login Widget → JWT stored as `sp_token` in localStorage.
 
-### Telethon session security
-Each user's Telethon session file is encrypted at rest with AES-256-GCM (`app/services/encryption.py`) using `SESSION_ENCRYPTION_KEY`. Sessions are stored in the `sessions/` volume. Never commit `.session` files.
+### Prompts
+All prompts live in `app/prompts/` (`classification.py`, `summarization.py`, `event_extraction.py`). When editing prompts, keep the parsing logic in `ai_engine.py` in sync with the expected output format.
 
 ## Key configuration
-All settings are loaded from `.env` via Pydantic `Settings` in `app/config.py`. Copy `.env.example` to `.env` before first run. Critical vars: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY`, `DATABASE_URL`, `SESSION_ENCRYPTION_KEY` (32-byte hex: `openssl rand -hex 32`), `SECRET_KEY`.
+All settings loaded from `.env` via Pydantic `Settings` in `app/config.py` (cached with `lru_cache`). Copy `.env.example` to `.env` before first run.
 
-## Prompts
-All Claude prompts live in `app/prompts/`. They use role prompting, few-shot examples (classification), chain-of-thought (`<thought>` blocks stripped by regex before parsing), and delimiters (`###`, `"""`). When editing prompts, the parsing logic in `ai_engine.py` must stay in sync with the expected output format.
+Critical vars: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_STRING`, `TELEGRAM_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `DATABASE_URL`, `SESSION_ENCRYPTION_KEY` (32-byte hex: `openssl rand -hex 32`), `SECRET_KEY`.
+
+Digest schedule controlled by `DIGEST_MORNING_HOUR` and `DIGEST_EVENING_HOUR` (UTC integers, defaults 8 and 20).
+
+## Database schema notes
+- `users.id` is the Telegram user ID (BigInteger), not a serial PK.
+- `posts.published_at` is `TIMESTAMP WITHOUT TIME ZONE` — always strip `tzinfo` before inserting (`pub_at.replace(tzinfo=None)`).
+- `posts.embedding` is `pgvector Vector(1536)` — currently populated with zeros.
+- Alembic `versions/` directory may be empty; run `alembic revision --autogenerate` to generate the first migration.

@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # Telegram Bot
     telegram_bot_token: str = ""
 
-    # Anthropic
-    anthropic_api_key: str = ""
+    # DeepSeek
+    deepseek_api_key: str = ""
 
     # Database
     database_url: str = "postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint"
@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Digest schedule
-    digest_morning_hour: int = 8
-    digest_evening_hour: int = 20
+    digest_morning_hour: int = 9
+    digest_evening_hour: int = 21
 
     # Sessions directory
     sessions_dir: str = "sessions"

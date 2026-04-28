@@ -68,7 +68,9 @@ class TelegramIngestion:
         session_str = settings.telegram_session_string or self._load_session_string()
         session = StringSession(session_str) if session_str else StringSession()
         client = TelegramClient(session, settings.telegram_api_id, settings.telegram_api_hash)
-        await client.start()
+        await client.connect()
+        if not await client.is_user_authorized():
+            raise RuntimeError("Telegram session is not authorized. Re-run generate_session.py and update TELEGRAM_SESSION_STRING.")
         if not settings.telegram_session_string:
             self._save_session_string(client.session.save())
         self._client = client
@@ -98,14 +100,21 @@ class TelegramIngestion:
     # ── Historical fetch ───────────────────────────────────────────────────────
 
     async def fetch_recent_posts(self, channel_id: int, hours: int = 24) -> AsyncIterator[dict]:
-        """Yield posts from the last `hours` hours, pre-filtered."""
+        """Yield posts from the last `hours` hours, pre-filtered.
+
+        Adds a 0.3s pause every 30 messages to avoid Telegram flood limits.
+        """
         client = await self._get_client()
         cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+        fetched = 0
         async for msg in client.iter_messages(channel_id, limit=500):
             if not isinstance(msg, Message):
                 continue
             if msg.date < cutoff:
                 break
+            fetched += 1
+            if fetched % 30 == 0:
+                await asyncio.sleep(0.3)
             post = self._process_message(msg)
             if post:
                 yield post

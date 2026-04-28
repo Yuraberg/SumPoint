@@ -1,4 +1,5 @@
 """Digest and calendar endpoints."""
+from datetime import date
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,6 @@ async def get_digest(
     db: AsyncSession = Depends(get_db),
     hours: int = Query(24, ge=1, le=72),
 ):
-    """Build and return a fresh digest for the authenticated user."""
     return await build_user_digest(db, current_user.id, hours=hours)
 
 
@@ -27,8 +27,16 @@ async def get_digest(
 async def get_events(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
-    days_ahead: int = Query(7, ge=1, le=30),
+    days_ahead: int = Query(7, ge=1, le=365),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    event_type: str | None = Query(None),
 ):
-    """Return upcoming calendar events extracted from posts."""
-    events = await get_upcoming_events(db, current_user.id, days_ahead=days_ahead)
+    events = await get_upcoming_events(
+        db, current_user.id,
+        days_ahead=days_ahead,
+        date_from=date_from,
+        date_to=date_to,
+        event_type=event_type,
+    )
     return {"events": events}
