@@ -195,6 +195,8 @@ class MagicLinkRequest(BaseModel):
 async def _send_telegram_message(chat_id: int, text: str) -> bool:
     """Send a message via Telegram Bot API. Returns True on success."""
     import httpx
+    import logging
+    logger = logging.getLogger("sumpoint.auth")
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -203,8 +205,10 @@ async def _send_telegram_message(chat_id: int, text: str) -> bool:
                 "text": text,
                 "parse_mode": "HTML",
             })
+            logger.info(f"Telegram sendMessage chat_id={chat_id} status={resp.status_code} body={resp.text[:200]}")
             return resp.status_code == 200
-    except Exception:
+    except Exception as e:
+        logger.error(f"Telegram sendMessage failed: {e}")
         return False
 
 
