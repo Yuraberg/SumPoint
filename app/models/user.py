@@ -13,6 +13,7 @@ class User(Base):
     last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # Telegram chat ID for bot DM
 
     # Digest preferences
     digest_morning: Mapped[bool] = mapped_column(Boolean, default=True)

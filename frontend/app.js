@@ -52,9 +52,83 @@ async function tryMiniAppLogin() {
   }
 }
 
+// ── Magic Link ────────────────────────────────────────────────────────────────
+
+async function tryMagicLinkVerify() {
+  const params = new URLSearchParams(window.location.search);
+  const magicToken = params.get("token");
+  if (!magicToken) return false;
+  
+  // Clean URL
+  window.history.replaceState({}, "", "/");
+  
+  try {
+    const resp = await fetch(`${API}/auth/telegram/magic-link/verify?token=${encodeURIComponent(magicToken)}`);
+    if (!resp.ok) {
+      const err = await resp.json();
+      alert(err.detail || "Ссылка недействительна");
+      return false;
+    }
+    const { access_token } = await resp.json();
+    setToken(access_token);
+    return true;
+  } catch (e) {
+    alert("Ошибка входа: " + e.message);
+    return false;
+  }
+}
+
+async function requestMagicLink() {
+  const input = document.getElementById("magic-username");
+  const btn = document.getElementById("magic-btn");
+  const status = document.getElementById("magic-status");
+  const username = input.value.trim();
+  
+  if (!username) {
+    status.textContent = "Введите ваш Telegram @username";
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = "Отправка...";
+  status.textContent = "";
+  
+  try {
+    const resp = await fetch(`${API}/auth/telegram/magic-link/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      status.textContent = data.detail || "Ошибка";
+      status.className = "magic-status error";
+    } else {
+      status.textContent = data.message;
+      status.className = "magic-status success";
+    }
+  } catch (e) {
+    status.textContent = "Ошибка сети";
+    status.className = "magic-status error";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Получить ссылку";
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function boot() {
+  // Magic Link from URL
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("token")) {
+    const ok = await tryMagicLinkVerify();
+    if (ok) {
+      showApp();
+      return;
+    }
+  }
+  
   // Mini App: auto-login via initData
   if (isMiniApp) {
     const ok = await tryMiniAppLogin();

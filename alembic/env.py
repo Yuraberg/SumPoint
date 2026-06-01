@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.database import Base
-from app.models import User, Channel, Post  # noqa: F401 — ensure models are imported
+from app.models import User, Channel, Post, MagicLink  # noqa: F401 — ensure models are imported
 
 config = context.config
 if config.config_file_name is not None:

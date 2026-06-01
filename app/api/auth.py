@@ -1,14 +1,13 @@
 """
 Telegram Login Widget auth (GET/POST /auth/telegram)
-+ Mini App auth (POST /auth/telegram/miniapp — bypasses oauth.telegram.org block).
-
-Verifies HMAC hash (Login Widget) or WebApp initData (Mini App),
-upserts the User record, returns a 7-day JWT.
++ Mini App auth (POST /auth/telegram/miniapp)
++ Magic Link auth (POST /auth/telegram/magic-link/request, GET .../verify)
 """
 import hashlib
 import hmac
 import json
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from urllib.parse import parse_qs
 
@@ -21,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
+from app.models.magic_link import MagicLink
 from sqlalchemy import select
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -182,6 +182,112 @@ async def miniapp_login(data: MiniAppAuthData, db: AsyncSession = Depends(get_db
     return {"access_token": token, "token_type": "bearer"}
 
 
+# ── Magic Link ────────────────────────────────────────────────────────────────
+
+
+MAGIC_LINK_TTL_MINUTES = 10
+
+
+class MagicLinkRequest(BaseModel):
+    username: str  # Telegram @username (without @)
+
+
+async def _send_telegram_message(chat_id: int, text: str) -> bool:
+    """Send a message via Telegram Bot API. Returns True on success."""
+    import httpx
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+            })
+            return resp.status_code == 200
+    except Exception:
+        return False
+
+
+@router.post("/telegram/magic-link/request")
+async def request_magic_link(data: MagicLinkRequest, db: AsyncSession = Depends(get_db)):
+    """Request a one-time login link sent via Telegram bot."""
+    username = data.username.strip().lstrip("@")
+
+    # Find user by username
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден. Сначала напишите /start боту @SumProcPointBot.",
+        )
+
+    if not user.chat_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Сначала напишите /start боту @SumProcPointBot, чтобы активировать вход.",
+        )
+
+    # Create magic link
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
+    magic = MagicLink(user_id=user.id, expires_at=expires_at)
+    db.add(magic)
+    await db.flush()
+
+    # Send link via bot
+    login_url = f"https://sum.procpoint.ru/auth/login?token={magic.token}"
+    sent = await _send_telegram_message(
+        user.chat_id,
+        f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"
+        f"<a href=\"{login_url}\">Нажмите сюда, чтобы войти</a>\n\n"
+        f"Ссылка действительна {MAGIC_LINK_TTL_MINUTES} минут.",
+    )
+
+    if not sent:
+        # Clean up the created link
+        await db.delete(magic)
+        await db.flush()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Не удалось отправить сообщение. Убедитесь, что вы написали /start боту.",
+        )
+
+    return {"message": f"Ссылка отправлена в Telegram. Проверьте @SumProcPointBot."}
+
+
+@router.get("/telegram/magic-link/verify")
+async def verify_magic_link(token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    """Verify a magic link token and return a JWT."""
+    result = await db.execute(
+        select(MagicLink).where(
+            MagicLink.token == token,
+            MagicLink.used == False,
+            MagicLink.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    magic = result.scalar_one_or_none()
+
+    if not magic:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ссылка недействительна или истекла. Запросите новую.",
+        )
+
+    # Mark as used
+    magic.used = True
+    await db.flush()
+
+    # Get user
+    result = await db.execute(select(User).where(User.id == magic.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден.")
+
+    jwt_token = _create_jwt(user.id)
+    return {"access_token": jwt_token, "token_type": "bearer"}
+
+
 @router.post("/telegram")
 async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
     if not _verify_telegram_hash(data):
@@ -200,3 +306,4 @@ async def telegram_login(data: TelegramAuthData, db: AsyncSession = Depends(get_
 
     token = _create_jwt(user.id)
     return {"access_token": token, "token_type": "bearer"}
+
