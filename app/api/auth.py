@@ -263,33 +263,36 @@ async def request_magic_link(data: MagicLinkRequest, db: AsyncSession = Depends(
 @router.get("/telegram/magic-link/verify")
 async def verify_magic_link(token: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Verify a magic link token and return a JWT."""
-    result = await db.execute(
-        select(MagicLink).where(
-            MagicLink.token == token,
-            MagicLink.used == False,
-            MagicLink.expires_at > datetime.now(timezone.utc),
+    try:
+        result = await db.execute(
+            select(MagicLink).where(
+                MagicLink.token == token,
+                MagicLink.used == False,
+                MagicLink.expires_at > datetime.now(timezone.utc),
+            )
         )
-    )
-    magic = result.scalar_one_or_none()
+        magic = result.scalar_one_or_none()
 
-    if not magic:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ссылка недействительна или истекла. Запросите новую.",
-        )
+        if not magic:
+            raise HTTPException(
+                status_code=400,
+                detail="Ссылка недействительна или истекла. Запросите новую.",
+            )
 
-    # Mark as used
-    magic.used = True
-    await db.flush()
+        magic.used = True
+        await db.flush()
 
-    # Get user
-    result = await db.execute(select(User).where(User.id == magic.user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден.")
+        result = await db.execute(select(User).where(User.id == magic.user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
-    jwt_token = _create_jwt(user.id)
-    return {"access_token": jwt_token, "token_type": "bearer"}
+        jwt_token = _create_jwt(user.id)
+        return {"access_token": jwt_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
 
 @router.post("/telegram")
