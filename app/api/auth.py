@@ -237,7 +237,7 @@ async def request_magic_link(data: MagicLinkRequest, db: AsyncSession = Depends(
         await db.flush()
 
         # Send link via bot
-        login_url = f"https://sum.procpoint.ru/auth/login?token={magic.token}"
+        login_url = f"https://sum.procpoint.ru/?token={magic.token}"
         sent = await _send_telegram_message(
             user.chat_id,
             f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"
