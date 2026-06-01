@@ -28,4 +28,8 @@ async def init_db() -> None:
     import app.models  # noqa: F401
     async with engine.begin() as conn:
         await conn.execute(__import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # Add missing columns for existing tables (create_all won't alter them)
+        await conn.execute(__import__("sqlalchemy").text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_id BIGINT"
+        ))
         await conn.run_sync(Base.metadata.create_all)
