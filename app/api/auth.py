@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Annotated
 from urllib.parse import parse_qs
 
@@ -231,7 +231,7 @@ async def request_magic_link(data: MagicLinkRequest, db: AsyncSession = Depends(
             )
 
         # Create magic link
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
+        expires_at = datetime.utcnow() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
         magic = MagicLink(user_id=user.id, expires_at=expires_at)
         db.add(magic)
         await db.flush()
@@ -268,7 +268,7 @@ async def verify_magic_link(token: str = Query(...), db: AsyncSession = Depends(
             select(MagicLink).where(
                 MagicLink.token == token,
                 MagicLink.used == False,
-                MagicLink.expires_at > datetime.now(timezone.utc),
+                MagicLink.expires_at > datetime.utcnow(),
             )
         )
         magic = result.scalar_one_or_none()
