@@ -211,49 +211,53 @@ async def _send_telegram_message(chat_id: int, text: str) -> bool:
 @router.post("/telegram/magic-link/request")
 async def request_magic_link(data: MagicLinkRequest, db: AsyncSession = Depends(get_db)):
     """Request a one-time login link sent via Telegram bot."""
-    username = data.username.strip().lstrip("@")
+    try:
+        username = data.username.strip().lstrip("@")
 
-    # Find user by username
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
+        # Find user by username
+        result = await db.execute(select(User).where(User.username == username))
+        user = result.scalar_one_or_none()
 
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден. Сначала напишите /start боту @SumProcPointBot.",
-        )
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="Пользователь не найден. Сначала напишите /start боту @SumProcPointBot.",
+            )
 
-    if not user.chat_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Сначала напишите /start боту @SumProcPointBot, чтобы активировать вход.",
-        )
+        if not user.chat_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Сначала напишите /start боту @SumProcPointBot, чтобы активировать вход.",
+            )
 
-    # Create magic link
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
-    magic = MagicLink(user_id=user.id, expires_at=expires_at)
-    db.add(magic)
-    await db.flush()
-
-    # Send link via bot
-    login_url = f"https://sum.procpoint.ru/auth/login?token={magic.token}"
-    sent = await _send_telegram_message(
-        user.chat_id,
-        f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"
-        f"<a href=\"{login_url}\">Нажмите сюда, чтобы войти</a>\n\n"
-        f"Ссылка действительна {MAGIC_LINK_TTL_MINUTES} минут.",
-    )
-
-    if not sent:
-        # Clean up the created link
-        await db.delete(magic)
+        # Create magic link
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
+        magic = MagicLink(user_id=user.id, expires_at=expires_at)
+        db.add(magic)
         await db.flush()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Не удалось отправить сообщение. Убедитесь, что вы написали /start боту.",
+
+        # Send link via bot
+        login_url = f"https://sum.procpoint.ru/auth/login?token={magic.token}"
+        sent = await _send_telegram_message(
+            user.chat_id,
+            f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"
+            f"<a href=\"{login_url}\">Нажмите сюда, чтобы войти</a>\n\n"
+            f"Ссылка действительна {MAGIC_LINK_TTL_MINUTES} минут.",
         )
 
-    return {"message": f"Ссылка отправлена в Telegram. Проверьте @SumProcPointBot."}
+        if not sent:
+            await db.delete(magic)
+            await db.flush()
+            raise HTTPException(
+                status_code=500,
+                detail="Не удалось отправить сообщение. Убедитесь, что вы написали /start боту.",
+            )
+
+        return {"message": f"Ссылка отправлена в Telegram. Проверьте @SumProcPointBot."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
 
 @router.get("/telegram/magic-link/verify")
