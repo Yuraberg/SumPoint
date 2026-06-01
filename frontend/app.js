@@ -2,6 +2,7 @@
 
 const API = "/api/v1";
 let token = localStorage.getItem("sp_token") || null;
+let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
 
 let filters = { dateFrom: "", dateTo: "", category: "", channelId: "" };
 
@@ -28,14 +29,51 @@ async function apiFetch(path, opts = {}) {
   return resp.json();
 }
 
+// ── Mini App auto-login ──────────────────────────────────────────────────────
+
+async function tryMiniAppLogin() {
+  if (!isMiniApp) return false;
+  try {
+    const resp = await fetch(`${API}/auth/telegram/miniapp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ init_data: window.Telegram.WebApp.initData }),
+    });
+    if (!resp.ok) {
+      console.error("MiniApp auth failed:", await resp.text());
+      return false;
+    }
+    const { access_token } = await resp.json();
+    setToken(access_token);
+    return true;
+  } catch (e) {
+    console.error("MiniApp auth error:", e);
+    return false;
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-document.addEventListener("DOMContentLoaded", () => {
+async function boot() {
+  // Mini App: auto-login via initData
+  if (isMiniApp) {
+    const ok = await tryMiniAppLogin();
+    if (ok) {
+      showApp();
+      return;
+    }
+    // Fall through to widget if MiniApp auth fails
+  }
+
   if (token) {
     showApp();
   } else {
     document.getElementById("login-screen").style.display = "flex";
   }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  boot();
 
   document.getElementById("logout-btn").addEventListener("click", logout);
 

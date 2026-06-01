@@ -1,5 +1,5 @@
-"""/start command handler."""
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+""" /start command handler. """
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes
 
 
@@ -11,7 +11,8 @@ WELCOME = (
     "• 🏷 Классификация по темам (Рынок, Технологии, События…)\n"
     "• 📅 Автоматический календарь событий\n"
     "• 🔍 Тематический поиск\n\n"
-    "Используйте кнопки ниже для управления."
+    "Используйте кнопки ниже для управления.\n"
+    "Или нажмите *🌐 Веб-приложение*, чтобы открыть SumPoint в Telegram."
 )
 
 
@@ -23,6 +24,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             InlineKeyboardButton("🌆 Вечерний дайджест", callback_data="toggle_evening"),
         ],
         [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
+        [
+            InlineKeyboardButton(
+                "🌐 Веб-приложение",
+                web_app=WebAppInfo(url="https://sum.procpoint.ru"),
+            )
+        ],
     ]
     await update.message.reply_text(
         WELCOME,
