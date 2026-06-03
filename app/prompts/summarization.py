@@ -41,12 +41,17 @@ def build_digest_prompt(summaries: list[dict]) -> str:
         f"- [{item['category']}] {item['channel']}: {item['summary']}"
         for item in summaries
     )
+    from app.prompts.classification import CATEGORIES
+    cat_list = ", ".join(CATEGORIES)
     return f"""\
 You are a Professional Business Assistant with data analytics skills.
 Below is a list of summarised Telegram posts from today.
 Produce a well-structured daily digest in Markdown format,
 grouped by category. Keep each bullet concise.
 Write in the same language as the majority of posts.
+
+CRITICAL: Use ONLY these exact category names as section headers — do not translate,
+rename, or invent new categories: {cat_list}
 
 ### POSTS
 {items}

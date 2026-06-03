@@ -45,7 +45,7 @@ async def build_user_digest(
         {
             "channel": row.channel_title,
             "summary": row.Post.summary or "",
-            "category": row.Post.category or "Other",
+            "category": row.Post.category or "Прочее",
         }
         for row in rows
     ]

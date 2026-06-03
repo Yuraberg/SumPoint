@@ -51,7 +51,7 @@ def classify_post(text: str) -> str:
         if cat.lower() in last_line.lower():
             return cat
     logger.warning("Could not parse category from: %r", raw)
-    return "Other"
+    return "Прочее"
 
 
 def summarise_post(text: str, channel_title: str) -> str:
