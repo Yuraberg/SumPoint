@@ -50,7 +50,7 @@ async def build_user_digest(
         for row in rows
     ]
 
-    digest_text = _call(build_digest_prompt(summaries), max_tokens=1024, model=model)
+    digest_text = _call(build_digest_prompt(summaries), max_tokens=4096, model=model)
 
     all_events: list = []
     for row in rows:
