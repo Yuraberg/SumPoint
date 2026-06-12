@@ -32,4 +32,8 @@ async def init_db() -> None:
         await conn.execute(__import__("sqlalchemy").text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_id BIGINT"
         ))
+        # Migrate embedding column from 1536 to 768 dimensions for nomic-embed-text
+        await conn.execute(__import__("sqlalchemy").text(
+            "ALTER TABLE posts ALTER COLUMN embedding TYPE vector(768)"
+        ))
         await conn.run_sync(Base.metadata.create_all)

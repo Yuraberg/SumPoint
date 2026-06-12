@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # DeepSeek
     deepseek_api_key: str = ""
 
+    # Ollama (embeddings)
+    ollama_base_url: str = "http://host.docker.internal:11434"
+
     # Database
     database_url: str = "postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint"
 

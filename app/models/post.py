@@ -4,7 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from app.database import Base
 
-EMBEDDING_DIM = 1536  # text-embedding-3-small / compatible
+EMBEDDING_DIM = 768  # nomic-embed-text (Ollama)
 
 
 class Post(Base):

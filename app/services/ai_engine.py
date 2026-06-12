@@ -77,9 +77,21 @@ def extract_events(text: str) -> list[dict[str, Any]]:
 
 
 def generate_embedding(text: str) -> list[float]:
-    """Placeholder zero-vector until a real embeddings model is wired up."""
-    logger.info("Embedding generation: using zero-vector placeholder")
-    return [0.0] * 1536
+    """Generate embedding vector using Ollama's nomic-embed-text model."""
+    import json, urllib.request
+
+    url = f"{settings.ollama_base_url}/api/embeddings"
+    body = json.dumps({"model": "nomic-embed-text", "prompt": text}).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        vec = data.get("embedding", [0.0] * 768)
+        logger.info("Embedding generated (%d dims)", len(vec))
+        return vec
+    except Exception as e:
+        logger.warning("Ollama embedding failed: %s — using zero-vector fallback", e)
+        return [0.0] * 768
 
 
 def process_post(text: str, channel_title: str) -> dict[str, Any]:
