@@ -25,7 +25,7 @@ from app.prompts.classification import CATEGORIES
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-_client = OpenAI(api_key=settings.deepseek_api_key, base_url="https://api.deepseek.com")
+_client = OpenAI(api_key=settings.deepseek_api_key or None, base_url="https://api.deepseek.com")
 
 MODEL = "deepseek-chat"
 MAX_TOKENS = 512
