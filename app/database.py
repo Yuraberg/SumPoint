@@ -33,7 +33,18 @@ async def init_db() -> None:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_id BIGINT"
         ))
         # Migrate embedding column from 1536 to 768 dimensions for nomic-embed-text
+        # Existing rows have placeholder zero-vectors from the old dimension;
+        # nullify them first so pgvector doesn't reject the type change.
+        await conn.execute(__import__("sqlalchemy").text(
+            "ALTER TABLE posts ALTER COLUMN embedding DROP DEFAULT"
+        ))
+        await conn.execute(__import__("sqlalchemy").text(
+            "UPDATE posts SET embedding = NULL"
+        ))
         await conn.execute(__import__("sqlalchemy").text(
             "ALTER TABLE posts ALTER COLUMN embedding TYPE vector(768)"
+        ))
+        await conn.execute(__import__("sqlalchemy").text(
+            "ALTER TABLE posts ALTER COLUMN embedding SET DEFAULT array_fill(0::real, ARRAY[768])::vector"
         ))
         await conn.run_sync(Base.metadata.create_all)
