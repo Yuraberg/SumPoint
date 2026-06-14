@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Ollama (embeddings)
     ollama_base_url: str = "http://host.docker.internal:11434"
 
+    # Embedding server (BGE-M3, fast)
+    embedding_base_url: str = "http://host.docker.internal:8101"
+
     # Database
     database_url: str = "postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint"
 
