@@ -25,10 +25,10 @@ def _run(coro):
     Creates a fresh event loop for each call and disposes the old
     database engine to avoid fork-related loop conflicts.
     """
-    _dispose_engine()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+        _dispose_engine()
         return loop.run_until_complete(coro)
     finally:
         loop.close()
