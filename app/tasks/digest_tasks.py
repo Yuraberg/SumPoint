@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 from app.tasks.celery_app import celery_app
-from app.database import AsyncSessionLocal
+from app.database import _dispose_engine, AsyncSessionLocal
 from app.models.user import User
 from app.models.channel import Channel
 from app.models.post import Post
@@ -22,10 +22,10 @@ _BATCH_DELAY = 8.0      # seconds between batches
 
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
-
-    Creates a fresh event loop for each call to avoid MissingGreenlet
-    errors when Celery forks worker processes.
+    Creates a fresh event loop for each call and disposes the old
+    database engine to avoid fork-related loop conflicts.
     """
+    _dispose_engine()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:

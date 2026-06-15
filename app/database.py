@@ -4,8 +4,31 @@ from app.config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, echo=settings.debug)
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+_engine = None  # Lazy-init per event loop (avoids fork issues)
+
+
+def _get_engine():
+    global _engine
+    url = settings.database_url
+    if _engine is None:
+        _engine = create_async_engine(url, echo=settings.debug)
+    return _engine
+
+
+def _dispose_engine():
+    global _engine
+    if _engine is not None:
+        _engine.sync_engine.dispose()
+        _engine = None
+
+
+def _get_sessionmaker():
+    return async_sessionmaker(_get_engine(), expire_on_commit=False)
+
+
+# Backward-compatible alias: callers use `AsyncSessionLocal()` as before
+def AsyncSessionLocal():
+    return _get_sessionmaker()()
 
 
 class Base(DeclarativeBase):
@@ -13,7 +36,7 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
+    async with _get_sessionmaker()() as session:
         try:
             yield session
             await session.commit()
@@ -24,17 +47,13 @@ async def get_db() -> AsyncSession:
 
 async def init_db() -> None:
     """Create tables and enable pgvector extension."""
-    # Ensure all models are imported before create_all
     import app.models  # noqa: F401
+    engine = _get_engine()
     async with engine.begin() as conn:
         await conn.execute(__import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector"))
-        # Add missing columns for existing tables (create_all won't alter them)
         await conn.execute(__import__("sqlalchemy").text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_id BIGINT"
         ))
-        # Migrate embedding column from 1536 to 768 dimensions for nomic-embed-text
-        # Existing rows have placeholder zero-vectors from the old dimension;
-        # nullify them first so pgvector doesn't reject the type change.
         await conn.execute(__import__("sqlalchemy").text(
             "ALTER TABLE posts ALTER COLUMN embedding DROP DEFAULT"
         ))
