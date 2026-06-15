@@ -66,6 +66,15 @@ class TelegramIngestion:
             return self._client
         # Prefer env variable (Coolify), fallback to encrypted file
         session_str = settings.telegram_session_string or self._load_session_string()
+        if session_str:
+            try:
+                StringSession(session_str)
+            except Exception:
+                logger.warning("Invalid TELEGRAM_SESSION_STRING for user %s, falling back", self._user_id)
+                if settings.telegram_session_string:
+                    session_str = self._load_session_string()
+                else:
+                    session_str = None
         session = StringSession(session_str) if session_str else StringSession()
         client = TelegramClient(session, settings.telegram_api_id, settings.telegram_api_hash)
         await client.connect()
