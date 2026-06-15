@@ -1,7 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import get_settings
-import asyncio
 
 settings = get_settings()
 
@@ -17,16 +16,12 @@ def _get_engine():
 
 
 def _dispose_engine():
+    """Drop the engine reference without closing connections.
+    Connections will be garbage-collected. This avoids loop-conflict
+    errors when Celery forks worker processes.
+    """
     global _engine
-    if _engine is not None:
-        try:
-            async def _close():
-                await _engine.dispose()
-            asyncio.run(_close())
-        except Exception:
-            pass
-        finally:
-            _engine = None
+    _engine = None
 
 
 def _get_sessionmaker():
