@@ -21,8 +21,17 @@ _BATCH_DELAY = 8.0      # seconds between batches
 
 
 def _run(coro):
-    """Run an async coroutine from a sync Celery task."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    """Run an async coroutine from a sync Celery task.
+
+    Creates a fresh event loop for each call to avoid MissingGreenlet
+    errors when Celery forks worker processes.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 # ── Monitoring: fetch new posts every 5 min ───────────────────────────────────

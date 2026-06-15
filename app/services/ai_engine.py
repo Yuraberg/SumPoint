@@ -77,20 +77,20 @@ def extract_events(text: str) -> list[dict[str, Any]]:
 
 
 def generate_embedding(text: str) -> list[float]:
-    """Generate embedding vector using BGE-M3 via the fast embedding server."""
+    """Generate embedding vector using BGE-M3 via Ollama."""
     import json, urllib.request
 
-    url = f"{settings.embedding_base_url}/v1/embeddings"
-    body = json.dumps({"model": "bge-m3", "input": text[:8000]}).encode()
+    url = f"{settings.ollama_base_url}/api/embeddings"
+    body = json.dumps({"model": "bge-m3", "prompt": text[:8000]}).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
-        vec = data["data"][0]["embedding"]
-        logger.info("Embedding generated (%d dims)", len(vec))
+        vec = data["embedding"]
+        logger.info("Embedding generated (%d dims) via Ollama BGE-M3", len(vec))
         return vec
     except Exception as e:
-        logger.warning("BGE-M3 embedding failed: %s — using zero-vector fallback", e)
+        logger.warning("Ollama BGE-M3 embedding failed: %s — using zero-vector fallback", e)
         return [0.0] * 1024
 
 
