@@ -39,7 +39,7 @@ async def search_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             SELECT p.id, p.channel_id, p.text, p.published_at, p.summary,
                    p.category, p.is_ad,
                    c.title AS channel_title,
-                   p.embedding <=> :query_vec::vector AS similarity
+                   p.embedding <=> CAST(:query_vec AS vector) AS similarity
             FROM posts p
             JOIN channels c ON c.id = p.channel_id
             WHERE c.user_id = :user_id
