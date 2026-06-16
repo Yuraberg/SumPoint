@@ -28,7 +28,7 @@ services:
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "8001:8000"
+      - "8000"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
