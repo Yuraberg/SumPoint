@@ -17,31 +17,28 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
 
     # Ollama (embeddings)
-    ollama_base_url: str = "http://host.docker.internal:11434"
+    ollama_base_url: str = "http://172.20.0.1:11434"
 
     # Database
     database_url: str = "postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint"
 
     # Redis / Celery
     redis_url: str = "redis://localhost:6379/0"
+
+    # Celery
     celery_broker_url: str = "redis://localhost:6379/0"
-    celery_result_backend: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/0"
 
-    # Security
-    session_encryption_key: str = ""  # 32-byte hex
-    secret_key: str = "change-me-in-production"
-
-    # App
-    app_host: str = "0.0.0.0"
-    app_port: int = 8000
-    debug: bool = False
+    # Auth secrets
+    secret_key: str = ""
+    session_encryption_key: str = ""
 
     # Digest schedule
-    digest_morning_hour: int = 9
-    digest_evening_hour: int = 21
+    digest_morning_hour: int = 8
+    digest_evening_hour: int = 20
 
-    # Sessions directory
-    sessions_dir: str = "sessions"
+    # Debug
+    debug: bool = False
 
 
 @lru_cache
