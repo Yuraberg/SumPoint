@@ -944,3 +944,16 @@ body {
   height: 1px;
   background: var(--border);
 }
+
+/* ── Semantic Search Similarity Badge ─────────────────────────────────────── */
+.sim-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  white-space: nowrap;
+}

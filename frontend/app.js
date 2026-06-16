@@ -288,6 +288,10 @@ function renderPostRow(post) {
   const rawText = (post.text || "").replace(/\*\*/g, "").replace(/\n/g, " ").trim();
   const preview = rawText.length > 130 ? rawText.slice(0, 128) + "…" : rawText;
 
+  const simBadge = post.similarity != null
+  ? `<span class="sim-badge">${Math.round((1 - post.similarity) * 100)}%</span>`
+  : "";
+
   const hasSummary = !!post.summary;
   const hasEvents = post.events && (Array.isArray(post.events) ? post.events.length > 0 : Object.keys(post.events).length > 0);
   const dot1 = hasSummary ? "dot-green" : "dot-gray";
@@ -304,7 +308,7 @@ function renderPostRow(post) {
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
     <td class="cell-post" title="${escHtml(rawText.slice(0, 300))}">${escHtml(preview)}</td>
     <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(post.category)}</span>` : ""}</td>
-    <td class="cell-date">${date}</td>
+    <td class="cell-date">${simBadge} ${date}</td>
   `;
 
   const detailRow = document.createElement("tr");
@@ -344,7 +348,7 @@ async function runSearch() {
   const q = document.getElementById("search-input").value.trim();
   if (!q) { loadFeed(); return; }
   try {
-    const results = await apiFetch(`/posts/search?q=${encodeURIComponent(q)}&limit=80`);
+    const results = await apiFetch(`/posts/semantic-search?q=${encodeURIComponent(q)}&limit=80`);
     loadFeed(results);
   } catch (e) {
     alert("Ошибка поиска: " + e.message);

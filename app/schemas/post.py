@@ -15,6 +15,7 @@ class PostOut(BaseModel):
     events: Any | None
     channel_username: str | None = None
     channel_title: str | None = None
+    similarity: float | None = None  # cosine distance for semantic search
 
     model_config = {"from_attributes": True}
 
