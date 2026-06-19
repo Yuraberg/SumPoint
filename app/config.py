@@ -30,8 +30,11 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://localhost:6379/0"
 
     # Auth secrets
-    secret_key: str = ""
+    secret_key: str
     session_encryption_key: str = ""
+
+    # CORS — comma-separated list of allowed origins
+    cors_origins: str = "http://localhost:8000,http://localhost:8001"
 
     # Digest schedule
     digest_morning_hour: int = 8

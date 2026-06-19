@@ -11,7 +11,12 @@ def _get_key() -> bytes:
     raw = _settings.session_encryption_key
     if not raw:
         raise RuntimeError("SESSION_ENCRYPTION_KEY is not set")
-    return bytes.fromhex(raw)[:32]
+    key = bytes.fromhex(raw)
+    if len(key) != 32:
+        raise RuntimeError(
+            f"SESSION_ENCRYPTION_KEY must be 32 bytes (64 hex chars) for AES-256, got {len(key)} bytes"
+        )
+    return key
 
 
 def encrypt_file(plaintext: bytes) -> bytes:

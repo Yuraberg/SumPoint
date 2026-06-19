@@ -31,6 +31,15 @@ MODEL = "deepseek-chat"
 MAX_TOKENS = 512
 
 
+def _strip_thought(raw: str) -> str:
+    """Remove <thought>...</thought> blocks. Also strips an unterminated
+    trailing <thought> (e.g. truncated by max_tokens) so it never leaks
+    into a summary/category shown to the user."""
+    clean = re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL)
+    clean = re.sub(r"<thought>.*$", "", clean, flags=re.DOTALL)
+    return clean.strip()
+
+
 def _call(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None) -> str:
     """Send a prompt to DeepSeek and return the text response."""
     response = _client.chat.completions.create(
@@ -45,7 +54,7 @@ def classify_post(text: str) -> str:
     """Return one of the predefined category strings for the given post text."""
     prompt = build_classification_prompt(text)
     raw = _call(prompt)
-    clean = re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL).strip()
+    clean = _strip_thought(raw)
     last_line = [l.strip() for l in clean.splitlines() if l.strip()][-1] if clean else ""
     for cat in CATEGORIES:
         if cat.lower() in last_line.lower():
@@ -58,14 +67,14 @@ def summarise_post(text: str, channel_title: str) -> str:
     """Return a 1-3 sentence summary of the post."""
     prompt = build_summarization_prompt(text, channel_title)
     raw = _call(prompt, max_tokens=256)
-    return re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL).strip()
+    return _strip_thought(raw)
 
 
 def extract_events(text: str) -> list[dict[str, Any]]:
     """Return a list of event dicts extracted from the post."""
     prompt = build_event_extraction_prompt(text)
     raw = _call(prompt, max_tokens=512)
-    clean = re.sub(r"<thought>.*?</thought>", "", raw, flags=re.DOTALL).strip()
+    clean = _strip_thought(raw)
     match = re.search(r"\[.*\]", clean, re.DOTALL)
     if not match:
         return []
@@ -94,11 +103,17 @@ def generate_embedding(text: str) -> list[float]:
         return [0.0] * 1024
 
 
-def process_post(text: str, channel_title: str) -> dict[str, Any]:
-    """Full AI pipeline for one post. Returns enriched fields."""
-    return {
-        "category": classify_post(text),
-        "summary": summarise_post(text, channel_title),
-        "events": extract_events(text),
-        "embedding": generate_embedding(text),
-    }
+def process_post(text: str, channel_title: str) -> dict[str, Any] | None:
+    """Full AI pipeline for one post. Returns enriched fields, or None if
+    DeepSeek is unavailable — callers should skip the post and continue
+    with the rest of the batch rather than aborting the whole fetch."""
+    try:
+        return {
+            "category": classify_post(text),
+            "summary": summarise_post(text, channel_title),
+            "events": extract_events(text),
+            "embedding": generate_embedding(text),
+        }
+    except Exception:
+        logger.exception("process_post failed; skipping this post")
+        return None

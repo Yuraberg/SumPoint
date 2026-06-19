@@ -19,6 +19,21 @@ _CHANNEL_DELAY = 1.5    # seconds between individual channel fetches
 _BATCH_SIZE = 5         # channels per batch before a longer pause
 _BATCH_DELAY = 8.0      # seconds between batches
 
+_DIGEST_TEXT_LIMIT = 4000
+
+
+def _truncate_digest(text: str) -> str:
+    if len(text) > _DIGEST_TEXT_LIMIT:
+        return text[:_DIGEST_TEXT_LIMIT] + "\n…"
+    return text
+
+
+async def _send_digest_for_user(bot, user_id: int, db, hours: int, categories, model: str | None) -> None:
+    from app.services.digest_service import build_user_digest
+    digest = await build_user_digest(db, user_id, hours=hours, categories=categories, model=model)
+    text = _truncate_digest(digest.get("digest_markdown") or "Нет новых постов.")
+    await bot.send_message(chat_id=user_id, text=text, parse_mode="Markdown")
+
 
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
@@ -36,7 +51,13 @@ def _run(coro):
 
 # ── Monitoring: fetch new posts every 5 min ───────────────────────────────────
 
-@celery_app.task(name="app.tasks.digest_tasks.fetch_all_channels")
+@celery_app.task(
+    name="app.tasks.digest_tasks.fetch_all_channels",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+)
 def fetch_all_channels():
     """Fetch new posts from all active channels for all users."""
     _run(_async_fetch_all())
@@ -80,6 +101,12 @@ async def _async_fetch_all():
                                 continue
 
                             enriched = process_post(raw_post["text"], channel.title)
+                            if enriched is None:
+                                logger.warning(
+                                    "AI processing failed for message %s in channel %s; skipping",
+                                    raw_post["telegram_message_id"], channel.title,
+                                )
+                                continue
                             pub_at = raw_post["published_at"]
                             if pub_at.tzinfo is not None:
                                 pub_at = pub_at.replace(tzinfo=None)
@@ -117,14 +144,19 @@ async def _async_fetch_all():
 
 # ── Scheduled digests (09:00 and 21:00 UTC) ──────────────────────────────────
 
-@celery_app.task(name="app.tasks.digest_tasks.send_scheduled_digests")
+@celery_app.task(
+    name="app.tasks.digest_tasks.send_scheduled_digests",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    max_retries=3,
+)
 def send_scheduled_digests(slot: str):
     """Trigger digest delivery for all users who opted in to this slot."""
     _run(_async_send_digests(slot))
 
 
 async def _async_send_digests(slot: str):
-    from app.services.digest_service import build_user_digest
     from app.models.digest_schedule import DigestSchedule
     from app.config import get_settings
     from telegram import Bot
@@ -153,13 +185,7 @@ async def _async_send_digests(slot: str):
                 categories = sched.categories if (sched and sched.categories) else None
                 model = sched.model if sched else None
 
-                digest = await build_user_digest(
-                    db, user.id, hours=hours, categories=categories, model=model
-                )
-                text = digest.get("digest_markdown") or "Нет новых постов."
-                if len(text) > 4000:
-                    text = text[:4000] + "\n…"
-                await bot.send_message(chat_id=user.id, text=text, parse_mode="Markdown")
+                await _send_digest_for_user(bot, user.id, db, hours, categories, model)
             except Exception as e:
                 logger.error("Failed to send digest to user %s: %s", user.id, e)
 
@@ -190,15 +216,15 @@ async def _async_check_schedules():
         ).scalars().all()
 
         for sched in due:
+            # Claim the schedule immediately so a concurrent worker picking up
+            # the same due row won't also execute and double-send it.
+            sched.next_run_at = croniter(sched.cron_expr, now).get_next(datetime)
+            await db.commit()
             try:
                 await _execute_schedule(db, sched)
                 sched.last_run_at = now
             except Exception as e:
                 logger.error("Schedule %s (%s) failed: %s", sched.id, sched.name, e)
-            finally:
-                sched.next_run_at = croniter(sched.cron_expr, now).get_next(datetime)
-
-        if due:
             await db.commit()
 
 
@@ -209,17 +235,9 @@ async def _execute_schedule(db, sched):
     bot = Bot(token=settings.telegram_bot_token)
 
     if sched.schedule_type == "topics":
-        from app.services.digest_service import build_user_digest
-        digest = await build_user_digest(
-            db, sched.user_id,
-            hours=sched.hours_back,
-            categories=sched.categories,
-            model=sched.model,
+        await _send_digest_for_user(
+            bot, sched.user_id, db, sched.hours_back, sched.categories, sched.model
         )
-        text = digest.get("digest_markdown") or "Нет новых постов."
-        if len(text) > 4000:
-            text = text[:4000] + "\n…"
-        await bot.send_message(chat_id=sched.user_id, text=text, parse_mode="Markdown")
 
     elif sched.schedule_type == "events":
         from app.services.calendar_service import get_upcoming_events
@@ -238,7 +256,7 @@ async def _execute_schedule(db, sched):
             text = "\n".join(lines)
         else:
             text = "📅 Нет предстоящих событий на ближайшие 7 дней."
-        await bot.send_message(chat_id=sched.user_id, text=text, parse_mode="Markdown")
+        await bot.send_message(chat_id=sched.user_id, text=_truncate_digest(text), parse_mode="Markdown")
 
     elif sched.schedule_type == "collect":
         fetch_all_channels.delay()
@@ -246,7 +264,13 @@ async def _execute_schedule(db, sched):
 
 # ── Channel import / resolve (worker-only Telethon operations) ────────────────
 
-@celery_app.task(name="app.tasks.digest_tasks.import_channels_for_user")
+@celery_app.task(
+    name="app.tasks.digest_tasks.import_channels_for_user",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    max_retries=2,
+)
 def import_channels_for_user(user_id: int) -> dict:
     """Import all subscribed Telegram channels for a user."""
     return _run(_async_import_channels(user_id))

@@ -1,5 +1,4 @@
 """Channel management endpoints."""
-from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,12 +6,10 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.channel import Channel
-from app.models.user import User
 from app.schemas.channel import ChannelCreate, ChannelOut
-from app.api.auth import get_current_user
+from app.api.deps import CurrentUser
 
 router = APIRouter(prefix="/channels", tags=["channels"])
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.get("/", response_model=list[ChannelOut])

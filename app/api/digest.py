@@ -1,17 +1,14 @@
 """Digest and calendar endpoints."""
 from datetime import date
-from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.user import User
-from app.api.auth import get_current_user
+from app.api.deps import CurrentUser
 from app.services.digest_service import build_user_digest
 from app.services.calendar_service import get_upcoming_events
 
 router = APIRouter(prefix="/digest", tags=["digest"])
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.get("/")

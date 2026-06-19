@@ -105,6 +105,9 @@ async def schedule_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer()
     slot = query.data.replace("schedule_detail_", "")
+    if slot not in _SLOT_LABELS:
+        await query.answer("Некорректные данные.", show_alert=True)
+        return
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:
@@ -148,8 +151,15 @@ async def set_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     # pattern: set_hours_{slot}_{hours}
-    _, _, slot, hours_str = query.data.split("_", 3)
-    hours = int(hours_str)
+    try:
+        _, _, slot, hours_str = query.data.split("_", 3)
+        hours = int(hours_str)
+    except (ValueError, IndexError):
+        await query.answer("Некорректные данные.", show_alert=True)
+        return
+    if slot not in _SLOT_LABELS or hours not in VALID_HOURS:
+        await query.answer("Некорректные данные.", show_alert=True)
+        return
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:
@@ -171,8 +181,13 @@ async def set_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer()
     # pattern: set_model_{slot}_{model_name}  (model_name may contain hyphens)
     parts = query.data.split("_", 3)  # ["set", "model", slot, model_name]
-    slot = parts[2]
-    model_name = parts[3]
+    if len(parts) != 4:
+        await query.answer("Некорректные данные.", show_alert=True)
+        return
+    slot, model_name = parts[2], parts[3]
+    if slot not in _SLOT_LABELS or model_name not in AVAILABLE_MODELS:
+        await query.answer("Некорректные данные.", show_alert=True)
+        return
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:

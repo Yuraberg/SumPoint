@@ -18,4 +18,9 @@ COPY . .
 # Writable directory for encrypted session files
 RUN mkdir -p /app/sessions && chmod 700 /app/sessions
 
+# Run as a non-root user
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000

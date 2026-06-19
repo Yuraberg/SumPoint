@@ -1,18 +1,15 @@
 """Schedule management endpoints."""
 from datetime import datetime
-from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
-from app.models.user import User
 from app.models.schedule import Schedule, SCHEDULE_TYPES, AVAILABLE_MODELS
-from app.api.auth import get_current_user
+from app.api.deps import CurrentUser
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
-CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 def _next_run(cron_expr: str) -> datetime:
