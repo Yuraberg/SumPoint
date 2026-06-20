@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     digest_morning_hour: int = 8
     digest_evening_hour: int = 20
 
+    # Hour (UTC) for the nightly channel fetch + AI processing + embedding pass
+    posts_fetch_hour: int = 3
+
     # Debug
     debug: bool = False
 

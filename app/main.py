@@ -1,5 +1,4 @@
 """FastAPI application entry point."""
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -9,21 +8,15 @@ import os
 
 from app.api.router import api_router
 from app.config import get_settings
-from app.database import init_db
 from app.rate_limit import limiter
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    yield
-
-
+# Schema is owned exclusively by Alembic migrations (see CLAUDE.md —
+# `alembic upgrade head` runs before the app starts in both local dev and
+# Docker). The app no longer creates/migrates tables itself at startup.
 app = FastAPI(
     title="SumPoint",
     description="Intelligent Telegram content processing — AI digest, classification & event extraction",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 _settings = get_settings()

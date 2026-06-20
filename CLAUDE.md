@@ -56,7 +56,8 @@ python generate_session.py
 - `POST /channels/import` — imports user's Telegram subscriptions via Celery worker
 - `POST /channels/sync` — triggers background fetch (Celery), returns 202
 - `GET /posts/` — paginated feed; query params: `category`, `channel_id`, `date_from`, `date_to` (ISO dates), `limit`, `offset`
-- `GET /posts/search` — ILIKE text search (pgvector `embedding` column is a zero-vector stub)
+- `GET /posts/search` — ILIKE text search over `posts.text`
+- `GET /posts/semantic-search` — pgvector cosine search (`embedding <=> query_vec`) over BGE-M3 embeddings
 - `GET /digest/` — builds and returns a markdown digest for the last N hours
 - `GET /digest/events` — upcoming calendar events extracted from stored posts
 
@@ -64,10 +65,10 @@ python generate_session.py
 New posts flow through the Celery worker only (never the API container):
 
 1. **Ingestion** (`app/services/telegram_ingestion.py`) — Telethon fetches raw messages, pre-filters ads by keyword heuristics, deduplicates by SHA-256 content hash.
-2. **AI processing** (`app/services/ai_engine.py`) — `process_post()` calls DeepSeek three times: `classify_post()` → `summarise_post()` → `extract_events()`. Uses `deepseek-chat` via the OpenAI SDK (`base_url="https://api.deepseek.com"`). `<thought>` blocks are stripped by regex before parsing. `generate_embedding()` returns a placeholder zero-vector (1536 dims).
-3. **Storage** — Processed posts written to the `posts` table with `category`, `summary`, `events` (JSON), placeholder `embedding`.
+2. **AI processing** (`app/services/ai_engine.py`) — `process_post()` calls DeepSeek three times: `classify_post()` → `summarise_post()` → `extract_events()`. Uses `deepseek-chat` via the OpenAI SDK (`base_url="https://api.deepseek.com"`). `<thought>` blocks are stripped by regex before parsing. `generate_embedding()` calls Ollama BGE-M3 (`/api/embeddings`) for a 1024-dim vector, falling back to a zero-vector if Ollama is unreachable.
+3. **Storage** — Processed posts written to the `posts` table with `category`, `summary`, `events` (JSON), and `embedding`.
 
-`fetch_all_channels` Celery task runs every 5 minutes. Commits per channel inside a try/except so one failing channel doesn't block others. Users without `session_path` AND without `TELEGRAM_SESSION_STRING` are skipped.
+`fetch_all_channels` Celery task runs once nightly (`POSTS_FETCH_HOUR`, UTC, default 3) so Telethon polling and the DeepSeek/embedding calls it triggers stay off the hot path. Commits per channel inside a try/except so one failing channel doesn't block others. Users without `session_path` AND without `TELEGRAM_SESSION_STRING` are skipped.
 
 ### Telethon session: worker-only rule
 **Telethon (User API) must only run inside the Celery worker.** Running it from the API container simultaneously causes `AuthKeyDuplicatedError` because Telegram detects two different IP addresses using the same session. The API container resolves this by dispatching all Telethon operations to the worker via Celery tasks (`import_channels_for_user`, `resolve_channel_username`, `fetch_all_channels`) using `run_in_threadpool` + `.apply_async().get(timeout=...)`.
@@ -94,10 +95,10 @@ All settings loaded from `.env` via Pydantic `Settings` in `app/config.py` (cach
 
 Critical vars: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_STRING`, `TELEGRAM_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `DATABASE_URL`, `SESSION_ENCRYPTION_KEY` (32-byte hex: `openssl rand -hex 32`), `SECRET_KEY`.
 
-Digest schedule controlled by `DIGEST_MORNING_HOUR` and `DIGEST_EVENING_HOUR` (UTC integers, defaults 8 and 20).
+Digest schedule controlled by `DIGEST_MORNING_HOUR` and `DIGEST_EVENING_HOUR` (UTC integers, defaults 8 and 20). Nightly fetch/processing controlled by `POSTS_FETCH_HOUR` (UTC, default 3).
 
 ## Database schema notes
 - `users.id` is the Telegram user ID (BigInteger), not a serial PK.
 - `posts.published_at` is `TIMESTAMP WITHOUT TIME ZONE` — always strip `tzinfo` before inserting (`pub_at.replace(tzinfo=None)`).
-- `posts.embedding` is `pgvector Vector(1536)` — currently populated with zeros.
-- Alembic `versions/` directory may be empty; run `alembic revision --autogenerate` to generate the first migration.
+- `posts.embedding` is `pgvector Vector(1024)` (BGE-M3 dimension), populated by `generate_embedding()` during AI processing.
+- Schema is owned exclusively by Alembic — the app does **not** create or migrate tables at startup. Always run `alembic upgrade head` before starting the API/worker/bot (see `docker-compose.yml`'s `api` command).

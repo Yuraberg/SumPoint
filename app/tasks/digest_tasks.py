@@ -35,6 +35,12 @@ async def _send_digest_for_user(bot, user_id: int, db, hours: int, categories, m
     await bot.send_message(chat_id=user_id, text=text, parse_mode="Markdown")
 
 
+def _get_bot():
+    from app.config import get_settings
+    from telegram import Bot
+    return Bot(token=get_settings().telegram_bot_token)
+
+
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
     Creates a fresh event loop for each call and disposes the old
@@ -158,11 +164,8 @@ def send_scheduled_digests(slot: str):
 
 async def _async_send_digests(slot: str):
     from app.models.digest_schedule import DigestSchedule
-    from app.config import get_settings
-    from telegram import Bot
 
-    settings = get_settings()
-    bot = Bot(token=settings.telegram_bot_token)
+    bot = _get_bot()
 
     async with AsyncSessionLocal() as db:
         field = User.digest_morning if slot == "morning" else User.digest_evening
@@ -229,10 +232,7 @@ async def _async_check_schedules():
 
 
 async def _execute_schedule(db, sched):
-    from app.config import get_settings
-    from telegram import Bot
-    settings = get_settings()
-    bot = Bot(token=settings.telegram_bot_token)
+    bot = _get_bot()
 
     if sched.schedule_type == "topics":
         await _send_digest_for_user(

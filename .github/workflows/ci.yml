@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-test-secret-key
+      SESSION_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TELEGRAM_BOT_TOKEN: "123456:ci-test-token"
+      DEEPSEEK_API_KEY: ci-test-key
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Byte-compile sources
+        run: python -m py_compile $(find app bot -name "*.py")
