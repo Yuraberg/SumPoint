@@ -20,7 +20,7 @@
       <div class="magic-link-section">
         <p class="magic-link-hint">
           Напишите <code>/start</code> боту
-          <a href="https://t.me/SumProcPointBot" target="_blank">@SumProcPointBot</a>,
+          <a id="bot-link" href="#" target="_blank">@<span id="bot-username"></span></a>,
           затем введите ваш username:
         </p>
         <div class="magic-link-row">
@@ -35,11 +35,7 @@
 
       <!-- Telegram Login Widget (requires oauth.telegram.org) -->
       <div class="widget-divider"><span>или</span></div>
-      <script async src="https://telegram.org/js/telegram-widget.js?22"
-              data-telegram-login="SumProcPointBot"
-              data-size="large"
-              data-onauth="onTelegramAuth(user)"
-              data-request-access="write"></script>
+      <div id="telegram-widget-container"></div>
     </div>
   </section>
 

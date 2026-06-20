@@ -148,6 +148,7 @@ async function boot() {
 
 document.addEventListener("DOMContentLoaded", () => {
   boot();
+  loadPublicConfig();
 
   document.getElementById("logout-btn").addEventListener("click", logout);
 
@@ -195,6 +196,35 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("import-btn").addEventListener("click", importChannels);
   document.getElementById("sync-btn").addEventListener("click", syncChannels);
 });
+
+// ── Public config (bot username, base URL) ─────────────────────────────────────
+async function loadPublicConfig() {
+  try {
+    const resp = await fetch(`${API}/auth/config`);
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    if (cfg.bot_username) {
+      const usernameEl = document.getElementById("bot-username");
+      const linkEl = document.getElementById("bot-link");
+      if (usernameEl) usernameEl.textContent = cfg.bot_username;
+      if (linkEl) linkEl.href = `https://t.me/${encodeURIComponent(cfg.bot_username)}`;
+
+      const container = document.getElementById("telegram-widget-container");
+      if (container) {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", cfg.bot_username);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-onauth", "onTelegramAuth(user)");
+        script.setAttribute("data-request-access", "write");
+        container.appendChild(script);
+      }
+    }
+  } catch {
+    // Non-critical — login screen still works via Magic Link without bot link.
+  }
+}
 
 // ── Show app ──────────────────────────────────────────────────────────────────
 
@@ -325,7 +355,8 @@ function renderPostRow(post) {
       <div class="detail-label">Оригинальный текст</div>
       <div class="detail-original">${originalSafe}</div>
     </div>` : "";
-  const linkBlock = tgLink ? `<a class="detail-link" href="${tgLink}" target="_blank" rel="noopener">→ Открыть в Telegram</a>` : "";
+  const safeTgLink = sanitizeUrl(tgLink);
+  const linkBlock = safeTgLink ? `<a class="detail-link" href="${escHtml(safeTgLink)}" target="_blank" rel="noopener">→ Открыть в Telegram</a>` : "";
 
   detailRow.innerHTML = `<td colspan="5"><div class="detail-inner">${summaryBlock}${originalBlock}${linkBlock}</div></td>`;
 
@@ -340,6 +371,21 @@ function renderPostRow(post) {
 
 function escHtml(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Only allow http(s) URLs in href attributes — blocks javascript:/data: XSS
+// from untrusted content (e.g. links extracted by the AI from post text).
+function sanitizeUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -463,6 +509,7 @@ function renderEventRow(ev) {
   const speakers = (ev.speakers || []).join(", ");
   const partners = (ev.partners || []).join(", ");
   const mentions = ev.mentions || 1;
+  const safeEvLink = sanitizeUrl(ev.link);
 
   const mainRow = document.createElement("tr");
   mainRow.className = "data-row";
@@ -470,7 +517,7 @@ function renderEventRow(ev) {
     <td class="cell-evdate">${dateStr}${timeStr ? `<br><span class="ev-time">${timeStr}</span>` : ""}</td>
     <td class="cell-evname">
       <span class="ev-expand-icon">&#9660;</span>
-      ${ev.link ? `<a class="ev-name-link" href="${ev.link}" target="_blank" rel="noopener">${escHtml(name)}</a>` : escHtml(name)}
+      ${safeEvLink ? `<a class="ev-name-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">${escHtml(name)}</a>` : escHtml(name)}
     </td>
     <td class="cell-evtopics">${topics}</td>
     <td>${evType}</td>
@@ -488,8 +535,8 @@ function renderEventRow(ev) {
     ? `<div class="detail-label">Спикеры</div><div>${escHtml((ev.speakers || []).join(", "))}</div>` : "";
   const fullPartners = (ev.partners || []).length > 0
     ? `<div class="detail-label">Партнёры</div><div>${escHtml((ev.partners || []).join(", "))}</div>` : "";
-  const linkBlock = ev.link
-    ? `<a class="detail-link" href="${ev.link}" target="_blank" rel="noopener">→ Подробнее</a>` : "";
+  const linkBlock = safeEvLink
+    ? `<a class="detail-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">→ Подробнее</a>` : "";
 
   detailRow.innerHTML = `<td colspan="8"><div class="detail-inner ev-detail-inner">
     <div style="display:flex;gap:24px;flex-wrap:wrap">
@@ -559,7 +606,8 @@ async function addChannel() {
 
 async function removeChannel(id) {
   try {
-    await fetch(`${API}/channels/${id}`, { method: "DELETE", headers: authHeaders() });
+    const resp = await fetch(`${API}/channels/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
@@ -683,7 +731,8 @@ async function toggleSchedule(id, btn) {
 async function deleteSchedule(id) {
   if (!confirm("Удалить расписание?")) return;
   try {
-    await fetch(`${API}/schedule/${id}`, { method: "DELETE", headers: authHeaders() });
+    const resp = await fetch(`${API}/schedule/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadSchedule();
   } catch (e) {
     alert("Ошибка: " + e.message);

@@ -39,6 +39,13 @@ services:
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8001}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+    volumes:
+      - sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
@@ -59,11 +66,23 @@ services:
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+    volumes:
+      - sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m bot.bot' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   worker:
     build: .
@@ -71,16 +90,26 @@ services:
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+    volumes:
+      - sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
 
   beat:
     build: .
@@ -89,11 +118,22 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DIGEST_MORNING_HOUR=${DIGEST_MORNING_HOUR:-8}
+      - DIGEST_EVENING_HOUR=${DIGEST_EVENING_HOUR:-20}
+      - POSTS_FETCH_HOUR=${POSTS_FETCH_HOUR:-3}
+      - SECRET_KEY=${SECRET_KEY}
+      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   coolify:
@@ -101,3 +141,4 @@ networks:
 
 volumes:
   pgdata:
+  sessions:

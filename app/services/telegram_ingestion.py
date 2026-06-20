@@ -78,8 +78,12 @@ class TelegramIngestion:
         session = StringSession(session_str) if session_str else StringSession()
         client = TelegramClient(session, settings.telegram_api_id, settings.telegram_api_hash)
         await client.connect()
-        if not await client.is_user_authorized():
-            raise RuntimeError("Telegram session is not authorized. Re-run generate_session.py and update TELEGRAM_SESSION_STRING.")
+        try:
+            if not await client.is_user_authorized():
+                raise RuntimeError("Telegram session is not authorized. Re-run generate_session.py and update TELEGRAM_SESSION_STRING.")
+        except Exception:
+            await client.disconnect()
+            raise
         if not settings.telegram_session_string:
             self._save_session_string(client.session.save())
         self._client = client

@@ -46,26 +46,3 @@ async def get_db() -> AsyncSession:
             await session.rollback()
             raise
 
-
-async def init_db() -> None:
-    """Create tables and enable pgvector extension."""
-    import app.models  # noqa: F401
-    engine = _get_engine()
-    async with engine.begin() as conn:
-        await conn.execute(__import__("sqlalchemy").text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.execute(__import__("sqlalchemy").text(
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_id BIGINT"
-        ))
-        await conn.execute(__import__("sqlalchemy").text(
-            "ALTER TABLE posts ALTER COLUMN embedding DROP DEFAULT"
-        ))
-        await conn.execute(__import__("sqlalchemy").text(
-            "UPDATE posts SET embedding = NULL"
-        ))
-        await conn.execute(__import__("sqlalchemy").text(
-            "ALTER TABLE posts ALTER COLUMN embedding TYPE vector(1024)"
-        ))
-        await conn.execute(__import__("sqlalchemy").text(
-            "ALTER TABLE posts ALTER COLUMN embedding SET DEFAULT array_fill(0::real, ARRAY[1024])::vector"
-        ))
-        await conn.run_sync(Base.metadata.create_all)

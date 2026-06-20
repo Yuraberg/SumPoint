@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Integer, String, DateTime, JSON, ForeignKey
+from sqlalchemy import BigInteger, CheckConstraint, Integer, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -20,6 +20,10 @@ CRON_PRESETS = {
 
 class Schedule(Base):
     __tablename__ = "schedules"
+    __table_args__ = (
+        CheckConstraint("schedule_type IN ('topics', 'events', 'collect')", name="ck_schedules_type"),
+        CheckConstraint("status IN ('active', 'paused')", name="ck_schedules_status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

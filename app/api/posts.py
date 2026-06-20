@@ -1,6 +1,5 @@
 """Post retrieval and semantic search endpoints."""
 from datetime import date, datetime
-from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -8,13 +7,16 @@ from sqlalchemy import select, text
 from app.database import get_db
 from app.models.post import Post
 from app.models.channel import Channel
-from app.models.user import User
 from app.schemas.post import PostOut
-from app.api.auth import get_current_user
+from app.api.deps import CurrentUser
 from app.services.ai_engine import generate_embedding
 
 router = APIRouter(prefix="/posts", tags=["posts"])
-CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _escape_like(value: str) -> str:
+    """Escape ILIKE wildcard characters so user input is matched literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _to_post_out(post: Post, channel_username: str | None, channel_title: str | None) -> PostOut:
@@ -75,7 +77,7 @@ async def search_posts(
         .join(Channel, Post.channel_id == Channel.id)
         .where(Channel.user_id == current_user.id)
         .where(Post.is_ad == False)   # noqa: E712
-        .where(Post.text.ilike(f"%{q}%"))
+        .where(Post.text.ilike(f"%{_escape_like(q)}%"))
         .order_by(Post.published_at.desc())
         .limit(limit)
     )

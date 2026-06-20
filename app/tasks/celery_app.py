@@ -32,7 +32,9 @@ celery_app.conf.beat_schedule = {
     },
     "fetch-new-posts": {
         "task": "app.tasks.digest_tasks.fetch_all_channels",
-        "schedule": 300.0,  # every 5 minutes
+        # Once nightly — keeps Telethon polling (and the embedding pass it
+        # triggers via process_post) off the 24/7 hot path.
+        "schedule": crontab(hour=settings.posts_fetch_hour, minute=0),
     },
     "check-schedules": {
         "task": "app.tasks.digest_tasks.check_and_run_schedules",

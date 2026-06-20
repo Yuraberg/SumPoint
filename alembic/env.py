@@ -5,12 +5,18 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from app.config import get_settings
 from app.database import Base
-from app.models import User, Channel, Post, MagicLink  # noqa: F401 — ensure models are imported
+import app.models  # noqa: F401 — ensure all models are registered on Base.metadata
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Always use the app's configured DATABASE_URL (from .env / environment),
+# rather than the placeholder in alembic.ini, so migrations run against
+# the same database the app connects to.
+config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 target_metadata = Base.metadata
 

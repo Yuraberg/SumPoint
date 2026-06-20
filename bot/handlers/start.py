@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models.user import User
 
@@ -40,7 +41,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [
             InlineKeyboardButton(
                 "🌐 Веб-приложение",
-                web_app=WebAppInfo(url="https://sum.procpoint.ru"),
+                web_app=WebAppInfo(url=get_settings().app_base_url),
             )
         ],
     ]

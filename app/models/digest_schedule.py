@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Integer, String, Boolean, DateTime, JSON, UniqueConstraint, ForeignKey
+from sqlalchemy import BigInteger, Integer, String, Boolean, CheckConstraint, DateTime, JSON, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -9,7 +9,10 @@ VALID_HOURS = [24, 72, 168]
 
 class DigestSchedule(Base):
     __tablename__ = "digest_schedules"
-    __table_args__ = (UniqueConstraint("user_id", "slot", name="uq_user_slot"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "slot", name="uq_user_slot"),
+        CheckConstraint("slot IN ('morning', 'evening')", name="ck_digest_schedules_slot"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
