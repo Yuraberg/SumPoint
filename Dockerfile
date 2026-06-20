@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -11,15 +11,19 @@ RUN for i in 1 2 3; do \
     done && [ -f /usr/bin/gcc ] || exit 1
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
 COPY . .
 
 # Writable directory for encrypted session files
-RUN mkdir -p /app/sessions && chmod 700 /app/sessions
-
-# Run as a non-root user
-RUN useradd --create-home --shell /bin/bash appuser \
+RUN mkdir -p /app/sessions && chmod 700 /app/sessions \
+    && useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app
 USER appuser
 

@@ -28,6 +28,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
 
+
+@router.get("/config")
+async def public_config():
+    """Public, non-sensitive config the frontend needs at load time."""
+    return {
+        "bot_username": settings.telegram_bot_username,
+        "app_base_url": settings.app_base_url,
+    }
+
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
@@ -225,7 +234,7 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
     # Generic response regardless of whether the user/chat exists, to avoid
     # leaking which usernames are registered (user enumeration).
     generic_message = {
-        "message": "Если этот аккаунт активирован в @SumProcPointBot, ссылка для входа отправлена в Telegram."
+        "message": f"Если этот аккаунт активирован в @{settings.telegram_bot_username}, ссылка для входа отправлена в Telegram."
     }
     try:
         username = data.username.strip().lstrip("@")
@@ -241,7 +250,7 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
         db.add(magic)
         await db.flush()
 
-        login_url = f"https://sum.procpoint.ru/?token={magic.token}"
+        login_url = f"{settings.app_base_url}/?token={magic.token}"
         sent = await _send_telegram_message(
             user.chat_id,
             f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"

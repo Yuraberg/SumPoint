@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated list of allowed origins
     cors_origins: str = "http://localhost:8000,http://localhost:8001"
 
+    # Public app URL (used in magic-link / mini-app links) and bot username
+    app_base_url: str = "http://localhost:8001"
+    telegram_bot_username: str = "SumProcPointBot"
+
     # Digest schedule
     digest_morning_hour: int = 8
     digest_evening_hour: int = 20

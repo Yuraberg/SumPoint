@@ -148,6 +148,7 @@ async function boot() {
 
 document.addEventListener("DOMContentLoaded", () => {
   boot();
+  loadPublicConfig();
 
   document.getElementById("logout-btn").addEventListener("click", logout);
 
@@ -195,6 +196,35 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("import-btn").addEventListener("click", importChannels);
   document.getElementById("sync-btn").addEventListener("click", syncChannels);
 });
+
+// ── Public config (bot username, base URL) ─────────────────────────────────────
+async function loadPublicConfig() {
+  try {
+    const resp = await fetch(`${API}/auth/config`);
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    if (cfg.bot_username) {
+      const usernameEl = document.getElementById("bot-username");
+      const linkEl = document.getElementById("bot-link");
+      if (usernameEl) usernameEl.textContent = cfg.bot_username;
+      if (linkEl) linkEl.href = `https://t.me/${encodeURIComponent(cfg.bot_username)}`;
+
+      const container = document.getElementById("telegram-widget-container");
+      if (container) {
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.setAttribute("data-telegram-login", cfg.bot_username);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-onauth", "onTelegramAuth(user)");
+        script.setAttribute("data-request-access", "write");
+        container.appendChild(script);
+      }
+    }
+  } catch {
+    // Non-critical — login screen still works via Magic Link without bot link.
+  }
+}
 
 // ── Show app ──────────────────────────────────────────────────────────────────
 
