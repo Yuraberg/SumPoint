@@ -1,7 +1,10 @@
 """Celery tasks for digest scheduling and channel polling."""
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.tasks.celery_app import celery_app
 from app.database import _dispose_engine, AsyncSessionLocal
@@ -10,7 +13,6 @@ from app.models.channel import Channel
 from app.models.post import Post
 from app.services.telegram_ingestion import TelegramIngestion
 from app.services.ai_engine import process_post
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,13 @@ logger = logging.getLogger(__name__)
 _CHANNEL_DELAY = 1.5    # seconds between individual channel fetches
 _BATCH_SIZE = 5         # channels per batch before a longer pause
 _BATCH_DELAY = 8.0      # seconds between batches
+
+# Reposted/identical text is deduped against posts published within this
+# window, so a channel re-posting old content doesn't get flagged forever.
+_CONTENT_DEDUP_WINDOW_DAYS = 14
+
+_FETCH_LOCK_KEY = "sumpoint:fetch_lock"
+_FETCH_LOCK_TTL = 600  # safety net if a worker dies mid-run, in seconds
 
 _DIGEST_TEXT_LIMIT = 4000
 
@@ -69,83 +78,161 @@ def fetch_all_channels():
     _run(_async_fetch_all())
 
 
+async def _try_acquire_fetch_lock() -> "object | None":
+    """Redis NX lock so an overlapping manual /channels/sync (or a second
+    beat tick) can't run fetch_all_channels concurrently with this one —
+    concurrent runs raced on the same dedup checks and produced duplicate
+    inserts / lost-update rollbacks on shared channels."""
+    import redis.asyncio as aioredis
+    from app.config import get_settings
+
+    r = aioredis.from_url(get_settings().redis_url)
+    got_lock = await r.set(_FETCH_LOCK_KEY, "1", nx=True, ex=_FETCH_LOCK_TTL)
+    if not got_lock:
+        await r.aclose()
+        return None
+    return r
+
+
 async def _async_fetch_all():
     from app.config import get_settings
     _settings = get_settings()
-    async with AsyncSessionLocal() as db:
-        users = (await db.execute(select(User).where(User.is_active == True))).scalars().all()   # noqa: E712
-        for user in users:
-            if not _settings.telegram_session_string and not user.session_path:
-                continue
-            channels = (
-                await db.execute(
-                    select(Channel).where(Channel.user_id == user.id, Channel.is_active == True)   # noqa: E712
+
+    lock = await _try_acquire_fetch_lock()
+    if lock is None:
+        logger.info("fetch_all_channels already running; skipping this tick")
+        return
+
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                select(Channel, User)
+                .join(User, Channel.user_id == User.id)
+                .where(Channel.is_active == True, User.is_active == True)   # noqa: E712
+            )
+            if not _settings.telegram_session_string:
+                stmt = stmt.where(User.session_path != None)   # noqa: E711
+            # Oldest last_fetched_at first, then a bounded slice — spreads
+            # Telethon traffic across runs instead of bursting through every
+            # channel every time.
+            stmt = stmt.order_by(Channel.last_fetched_at.asc().nulls_first()).limit(
+                _settings.posts_fetch_batch_size
+            )
+            rows = (await db.execute(stmt)).all()
+            if not rows:
+                return
+
+            by_user: dict[int, list[Channel]] = {}
+            users_by_id: dict[int, User] = {}
+            for channel, user in rows:
+                by_user.setdefault(user.id, []).append(channel)
+                users_by_id[user.id] = user
+
+            channel_index = 0
+            for user_id, channels in by_user.items():
+                user = users_by_id[user_id]
+                ingestion = TelegramIngestion(user.id, user.session_path or "")
+                try:
+                    client = await ingestion._get_client()
+                    await client.get_dialogs()
+
+                    for channel in channels:
+                        try:
+                            await _fetch_channel(db, ingestion, channel)
+                            channel.last_fetched_at = datetime.utcnow()
+                            channel.last_error = None
+                            await db.commit()
+                        except Exception as e:
+                            logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, e)
+                            await db.rollback()
+                            channel.last_error = str(e)[:1000]
+                            channel.last_fetched_at = datetime.utcnow()
+                            await db.commit()
+
+                        # Anti-flood: pause between channels, longer pause between batches
+                        channel_index += 1
+                        if channel_index % _BATCH_SIZE == 0:
+                            await asyncio.sleep(_BATCH_DELAY)
+                        else:
+                            await asyncio.sleep(_CHANNEL_DELAY)
+
+                except Exception as e:
+                    logger.error("Error fetching for user %s: %s", user.id, e)
+                    await db.rollback()
+                finally:
+                    await ingestion.disconnect()
+    finally:
+        await lock.delete(_FETCH_LOCK_KEY)
+        await lock.aclose()
+
+
+async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> None:
+    dedup_cutoff = datetime.utcnow() - timedelta(days=_CONTENT_DEDUP_WINDOW_DAYS)
+
+    async for raw_post in ingestion.fetch_recent_posts(channel.telegram_id, hours=24):
+        if raw_post["is_ad"]:
+            continue
+
+        existing = (
+            await db.execute(
+                select(Post.id).where(
+                    Post.channel_id == channel.id,
+                    Post.telegram_message_id == raw_post["telegram_message_id"],
                 )
-            ).scalars().all()
-            if not channels:
-                continue
+            )
+        ).scalar_one_or_none()
+        if existing:
+            continue
 
-            ingestion = TelegramIngestion(user.id, user.session_path or "")
-            try:
-                client = await ingestion._get_client()
-                await client.get_dialogs()
+        # Catches reposts of identical text under a different message id,
+        # which the message-id uniqueness check above can't see.
+        dup_content = (
+            await db.execute(
+                select(Post.id).where(
+                    Post.channel_id == channel.id,
+                    Post.content_hash == raw_post["content_hash"],
+                    Post.published_at >= dedup_cutoff,
+                )
+            )
+        ).scalar_one_or_none()
+        if dup_content:
+            continue
 
-                for i, channel in enumerate(channels):
-                    try:
-                        async for raw_post in ingestion.fetch_recent_posts(channel.telegram_id, hours=24):
-                            if raw_post["is_ad"]:
-                                continue
-                            existing = (
-                                await db.execute(
-                                    select(Post).where(
-                                        Post.channel_id == channel.id,
-                                        Post.telegram_message_id == raw_post["telegram_message_id"],
-                                    )
-                                )
-                            ).scalar_one_or_none()
-                            if existing:
-                                continue
-
-                            enriched = process_post(raw_post["text"], channel.title)
-                            if enriched is None:
-                                logger.warning(
-                                    "AI processing failed for message %s in channel %s; skipping",
-                                    raw_post["telegram_message_id"], channel.title,
-                                )
-                                continue
-                            pub_at = raw_post["published_at"]
-                            if pub_at.tzinfo is not None:
-                                pub_at = pub_at.replace(tzinfo=None)
-                            post = Post(
-                                channel_id=channel.id,
-                                telegram_message_id=raw_post["telegram_message_id"],
-                                text=raw_post["text"],
-                                published_at=pub_at,
-                                is_ad=raw_post["is_ad"],
-                                category=enriched["category"],
-                                summary=enriched["summary"],
-                                events=enriched["events"] or None,
-                                embedding=enriched["embedding"],
-                                processed_at=datetime.utcnow(),
-                            )
-                            db.add(post)
-                        channel.last_fetched_at = datetime.utcnow()
-                        await db.commit()
-                    except Exception as e:
-                        logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, e)
-                        await db.rollback()
-
-                    # Anti-flood: pause between channels, longer pause between batches
-                    if (i + 1) % _BATCH_SIZE == 0:
-                        await asyncio.sleep(_BATCH_DELAY)
-                    else:
-                        await asyncio.sleep(_CHANNEL_DELAY)
-
-            except Exception as e:
-                logger.error("Error fetching for user %s: %s", user.id, e)
-                await db.rollback()
-            finally:
-                await ingestion.disconnect()
+        enriched = await process_post(raw_post["text"], channel.title)
+        if enriched is None:
+            logger.warning(
+                "AI processing failed for message %s in channel %s; skipping",
+                raw_post["telegram_message_id"], channel.title,
+            )
+            continue
+        pub_at = raw_post["published_at"]
+        if pub_at.tzinfo is not None:
+            pub_at = pub_at.replace(tzinfo=None)
+        post = Post(
+            channel_id=channel.id,
+            telegram_message_id=raw_post["telegram_message_id"],
+            content_hash=raw_post["content_hash"],
+            text=raw_post["text"],
+            published_at=pub_at,
+            is_ad=raw_post["is_ad"],
+            category=enriched["category"],
+            summary=enriched["summary"],
+            events=enriched["events"] or None,
+            embedding=enriched["embedding"],
+            processed_at=datetime.utcnow(),
+        )
+        # A savepoint per post so a duplicate raced in by a concurrent writer
+        # (unique constraint violation) only discards this one insert instead
+        # of rolling back every post already processed for this channel.
+        try:
+            async with db.begin_nested():
+                db.add(post)
+                await db.flush()
+        except IntegrityError:
+            logger.info(
+                "Duplicate post %s in channel %s skipped (race with another run)",
+                raw_post["telegram_message_id"], channel.title,
+            )
 
 
 # ── Scheduled digests (09:00 and 21:00 UTC) ──────────────────────────────────
@@ -313,6 +400,22 @@ async def _async_import_channels(user_id: int) -> dict:
 
         await db.commit()
         return {"imported": added, "total": len(subscribed)}
+
+
+@celery_app.task(name="app.tasks.digest_tasks.uptime_kuma_heartbeat")
+def uptime_kuma_heartbeat():
+    """Ping the configured Uptime Kuma push monitor so it can alert when
+    the worker/beat stop ticking. No-op if UPTIME_KUMA_PUSH_URL isn't set."""
+    from app.config import get_settings
+    import httpx
+
+    url = get_settings().uptime_kuma_push_url
+    if not url:
+        return
+    try:
+        httpx.get(url, timeout=10)
+    except Exception as e:
+        logger.warning("Uptime Kuma heartbeat failed: %s", e)
 
 
 @celery_app.task(name="app.tasks.digest_tasks.resolve_channel_username")

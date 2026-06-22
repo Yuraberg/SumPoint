@@ -17,6 +17,11 @@ class Post(Base):
     channel_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("channels.id", ondelete="CASCADE"))
     telegram_message_id: Mapped[int] = mapped_column(Integer)
 
+    # SHA-256 of the post text — used to dedup reposted/identical content
+    # across runs (the message-id constraint above only catches re-fetches
+    # of the *same* Telegram message).
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     # Raw content
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime] = mapped_column(DateTime)
