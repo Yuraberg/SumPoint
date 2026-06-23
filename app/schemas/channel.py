@@ -16,6 +16,7 @@ class ChannelOut(BaseModel):
     category: str | None
     is_active: bool
     last_fetched_at: datetime | None
+    last_error: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

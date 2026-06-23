@@ -164,6 +164,7 @@ class TelegramIngestion:
             "telegram_message_id": msg.id,
             "channel_telegram_id": msg.peer_id.channel_id if hasattr(msg.peer_id, "channel_id") else 0,
             "text": text,
+            "content_hash": h,
             "published_at": msg.date,
             "is_ad": _is_ad(text),
         }

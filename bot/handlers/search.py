@@ -80,7 +80,7 @@ async def search_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def _semantic_search(user_id: int, query: str, limit: int = 5) -> list:
     """Fallback: pgvector cosine distance search via embedding + progress bar."""
     try:
-        embedding = generate_embedding(query)
+        embedding = await generate_embedding(query)
     except Exception as e:
         logger.warning("Semantic search embedding failed: %s", e)
         return []

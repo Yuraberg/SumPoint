@@ -22,12 +22,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint"
 
-    # Redis / Celery
+    # Redis — also used as the Celery broker/result backend (see app/tasks/celery_app.py)
     redis_url: str = "redis://localhost:6379/0"
 
-    # Celery
-    celery_broker_url: str = "redis://localhost:6379/0"
-    celery_result_backend: str = "redis://localhost:6379/0"
+    # Uptime Kuma push-monitor URL. If set, a periodic Celery task pings it
+    # so Uptime Kuma can alert when the worker/beat stop ticking.
+    uptime_kuma_push_url: str = ""
 
     # Auth secrets
     secret_key: str
@@ -44,8 +44,11 @@ class Settings(BaseSettings):
     digest_morning_hour: int = 8
     digest_evening_hour: int = 20
 
-    # Hour (UTC) for the nightly channel fetch + AI processing + embedding pass
-    posts_fetch_hour: int = 3
+    # Continuous channel-fetch pacing — runs every N minutes, processing a small
+    # slice of channels each time (oldest last_fetched_at first) so Telethon
+    # polling stays spread out instead of bursting and risking a flood ban.
+    posts_fetch_interval_minutes: int = 20
+    posts_fetch_batch_size: int = 20
 
     # Debug
     debug: bool = False

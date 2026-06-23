@@ -93,7 +93,7 @@ async def semantic_search_posts(
     limit: int = Query(20, le=100),
 ):
     """Semantic search: embed query with BGE-M3 via Ollama, then pgvector cosine search."""
-    embedding = generate_embedding(q)
+    embedding = await generate_embedding(q)
     vec_literal = "[" + ",".join(str(x) for x in embedding) + "]"
 
     sql = text("""
