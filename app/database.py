@@ -16,11 +16,15 @@ def _get_engine():
 
 
 def _dispose_engine():
-    """Drop the engine reference without closing connections.
-    Connections will be garbage-collected. This avoids loop-conflict
-    errors when Celery forks worker processes.
+    """Dispose the current engine and drop reference.
+    Must be called before asyncio.run() in Celery tasks.
     """
     global _engine
+    if _engine is not None:
+        try:
+            _engine.sync_engine.dispose()
+        except Exception:
+            pass
     _engine = None
 
 

@@ -52,16 +52,11 @@ def _get_bot():
 
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
-    Creates a fresh event loop for each call and disposes the old
-    database engine to avoid fork-related loop conflicts.
+    Uses await_fallback() to provide the greenlet context SQLAlchemy 2.0+ needs.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        _dispose_engine()
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    from sqlalchemy.util import await_fallback
+    _dispose_engine()
+    return await_fallback(coro)
 
 
 # ── Monitoring: fetch new posts every 5 min ───────────────────────────────────
@@ -143,11 +138,17 @@ async def _async_fetch_all():
                             channel.last_error = None
                             await db.commit()
                         except Exception as e:
-                            logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, e)
-                            await db.rollback()
+                            logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, str(e)[:200])
+                            try:
+                                await db.rollback()
+                            except Exception:
+                                pass
                             channel.last_error = str(e)[:1000]
                             channel.last_fetched_at = datetime.utcnow()
-                            await db.commit()
+                            try:
+                                await db.commit()
+                            except Exception:
+                                pass
 
                         # Anti-flood: pause between channels, longer pause between batches
                         channel_index += 1
@@ -157,8 +158,11 @@ async def _async_fetch_all():
                             await asyncio.sleep(_CHANNEL_DELAY)
 
                 except Exception as e:
-                    logger.error("Error fetching for user %s: %s", user.id, e)
-                    await db.rollback()
+                    logger.error("Error fetching for user %s: %s", user.id, str(e)[:200])
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        pass
                 finally:
                     await ingestion.disconnect()
     finally:
