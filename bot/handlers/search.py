@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 
 
 async def search_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Search posts by query. Usage: /search <text>"""
-    query_text = " ".join(context.args) if context.args else ""
+    """Search posts by query. Usage: /search <text> [#Категория]"""
+    args = list(context.args or [])
+    category = None
+    for arg in list(args):
+        if arg.startswith("#"):
+            category = arg[1:]
+            args.remove(arg)
+    query_text = " ".join(args)
+
     if not query_text:
         await update.message.reply_text(
-            "🔍 *Поиск*\n\nНапишите запрос после /search:\n`/search умный дом zigbee`",
+            "🔍 *Поиск*\n\nНапишите запрос после /search:\n"
+            "`/search умный дом zigbee`\n"
+            "`/search zigbee #Технологии` — с фильтром по категории",
             parse_mode="Markdown",
         )
         return
@@ -47,9 +56,10 @@ async def search_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     )
                 )
                 .where(Post.is_ad == False)
-                .order_by(Post.published_at.desc())
-                .limit(5)
             )
+            if category:
+                stmt = stmt.where(Post.category == category)
+            stmt = stmt.order_by(Post.published_at.desc()).limit(5)
             rows = (await db.execute(stmt)).all()
 
         # Step 2: if ILIKE found nothing, try pgvector semantic search

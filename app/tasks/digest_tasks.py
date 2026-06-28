@@ -132,6 +132,7 @@ async def _async_fetch_all():
                     await client.get_dialogs()
 
                     for channel in channels:
+                        was_healthy = channel.last_error is None
                         try:
                             await _fetch_channel(db, ingestion, channel)
                             channel.last_fetched_at = datetime.utcnow()
@@ -149,6 +150,16 @@ async def _async_fetch_all():
                                 await db.commit()
                             except Exception:
                                 pass
+
+                            if was_healthy and user.chat_id:
+                                try:
+                                    bot = _get_bot()
+                                    await bot.send_message(
+                                        chat_id=user.chat_id,
+                                        text=f"⚠️ Канал «{channel.title}» перестал обновляться: {str(e)[:200]}",
+                                    )
+                                except Exception:
+                                    logger.warning("Failed to notify user %s about channel %s failure", user.id, channel.id)
 
                         # Anti-flood: pause between channels, longer pause between batches
                         channel_index += 1

@@ -25,6 +25,27 @@ WELCOME = (
 )
 
 
+HELP_TEXT = (
+    "🛟 *Команды SumPoint*\n\n"
+    "*Посты*\n"
+    "• `/recent` — последние посты\n"
+    "• `/recent #Категория` — последние посты по теме\n"
+    "• `/search <текст>` — поиск по постам\n"
+    "• `/search <текст> #Категория` — поиск с фильтром по теме\n\n"
+    "*Каналы*\n"
+    "• `/channels` — список ваших каналов и их статус\n"
+    "• `/addchannel @username` — добавить канал\n"
+    "• `/removechannel <id>` — удалить канал\n\n"
+    "*Прочее*\n"
+    "• `/start` — главное меню\n"
+    "• `/help` — это сообщение"
+)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Greet user and save chat_id for future Magic Link logins."""
     user = update.effective_user
