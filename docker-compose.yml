@@ -86,7 +86,10 @@ services:
 
   worker:
     build: .
-    command: celery -A app.tasks.celery_app worker --loglevel=info --pool=threads
+    # solo pool — required by _run()'s await_fallback() bridge in digest_tasks.py,
+    # which needs a thread-affine event loop (threads pool breaks it: each worker
+    # thread has no event loop of its own).
+    command: celery -A app.tasks.celery_app worker --loglevel=info --pool=solo
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
