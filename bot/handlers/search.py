@@ -26,28 +26,39 @@ async def search_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user_id = update.effective_user.id
     await update.message.reply_text("🔍 Ищу…", parse_mode="Markdown")
 
-    # Step 1: ILIKE search on text and summary (fast, exact match)
-    async with AsyncSessionLocal() as db:
-        pattern = f"%{query_text}%"
-        stmt = (
-            select(Post, Channel.title.label("channel_title"))
-            .join(Channel, Post.channel_id == Channel.id)
-            .where(Channel.user_id == user_id)
-            .where(
-                or_(
-                    Post.text.ilike(pattern),
-                    Post.summary.ilike(pattern),
+    try:
+        # Step 1: ILIKE search on text and summary (fast, exact match)
+        async with AsyncSessionLocal() as db:
+            pattern = f"%{query_text}%"
+            stmt = (
+                select(
+                    Post.text,
+                    Post.summary,
+                    Post.published_at,
+                    Post.category,
+                    Channel.title.label("channel_title"),
                 )
+                .join(Channel, Post.channel_id == Channel.id)
+                .where(Channel.user_id == user_id)
+                .where(
+                    or_(
+                        Post.text.ilike(pattern),
+                        Post.summary.ilike(pattern),
+                    )
+                )
+                .where(Post.is_ad == False)
+                .order_by(Post.published_at.desc())
+                .limit(5)
             )
-            .where(Post.is_ad == False)
-            .order_by(Post.published_at.desc())
-            .limit(5)
-        )
-        rows = (await db.execute(stmt)).all()
+            rows = (await db.execute(stmt)).all()
 
-    # Step 2: if ILIKE found nothing, try pgvector semantic search
-    if not rows:
-        rows = await _semantic_search(user_id, query_text)
+        # Step 2: if ILIKE found nothing, try pgvector semantic search
+        if not rows:
+            rows = await _semantic_search(user_id, query_text)
+    except Exception:
+        logger.exception("Search failed for query %r", query_text)
+        await update.message.reply_text("⚠️ Ошибка поиска. Попробуйте позже.")
+        return
 
     if not rows:
         await update.message.reply_text(
