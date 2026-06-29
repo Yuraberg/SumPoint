@@ -98,6 +98,33 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(f"✅ Канал *{ch.title}* добавлен.", parse_mode="Markdown")
 
 
+async def import_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Import all subscribed Telegram channels. Usage: /import"""
+    user_id = update.effective_user.id
+    await update.message.reply_text("⏳ Импортирую ваши каналы из Telegram, это может занять до пары минут…")
+
+    from app.tasks.digest_tasks import import_channels_for_user
+
+    task = import_channels_for_user.apply_async(args=[user_id])
+    try:
+        result = await asyncio.to_thread(lambda: task.get(timeout=120))
+    except Exception:
+        await update.message.reply_text(
+            "⌛ Импорт занимает больше времени, чем обычно — он продолжается в фоне. "
+            "Проверьте `/channels` через пару минут.",
+            parse_mode="Markdown",
+        )
+        return
+
+    if result.get("error"):
+        await update.message.reply_text(f"⚠️ Ошибка импорта: {result['error']}")
+        return
+
+    await update.message.reply_text(
+        f"✅ Импортировано {result.get('imported', 0)} из {result.get('total', 0)} каналов."
+    )
+
+
 async def remove_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Remove a channel by id. Usage: /removechannel <id>"""
     if not context.args:

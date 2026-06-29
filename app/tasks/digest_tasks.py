@@ -11,6 +11,7 @@ from app.database import _dispose_engine, AsyncSessionLocal
 from app.models.user import User
 from app.models.channel import Channel
 from app.models.post import Post
+from app.models.keyword_alert import KeywordAlert
 from app.services.telegram_ingestion import TelegramIngestion
 from app.services.ai_engine import process_post
 
@@ -248,6 +249,36 @@ async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> 
                 "Duplicate post %s in channel %s skipped (race with another run)",
                 raw_post["telegram_message_id"], channel.title,
             )
+            continue
+
+        await _notify_keyword_alerts(db, channel, post)
+
+
+async def _notify_keyword_alerts(db, channel: Channel, post: Post) -> None:
+    """Notify the channel owner if a keyword alert matches the new post."""
+    alerts = (
+        await db.execute(select(KeywordAlert).where(KeywordAlert.user_id == channel.user_id))
+    ).scalars().all()
+    if not alerts:
+        return
+
+    haystack = f"{post.text or ''} {post.summary or ''}".lower()
+    matched = [a.keyword for a in alerts if a.keyword in haystack]
+    if not matched:
+        return
+
+    user = (await db.execute(select(User).where(User.id == channel.user_id))).scalar_one_or_none()
+    if not user or not user.chat_id:
+        return
+
+    try:
+        bot = _get_bot()
+        await bot.send_message(
+            chat_id=user.chat_id,
+            text=f"🔔 «{channel.title}»: новый пост по словам {', '.join(matched)}\n\n{(post.summary or post.text or '')[:300]}",
+        )
+    except Exception:
+        logger.warning("Failed to send keyword alert notification to user %s", user.id)
 
 
 # ── Scheduled digests (09:00 and 21:00 UTC) ──────────────────────────────────
