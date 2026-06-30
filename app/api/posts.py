@@ -1,5 +1,5 @@
 """Post retrieval and semantic search endpoints."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -59,7 +59,7 @@ async def list_posts(
     if date_from:
         stmt = stmt.where(Post.published_at >= datetime(date_from.year, date_from.month, date_from.day))
     if date_to:
-        stmt = stmt.where(Post.published_at < datetime(date_to.year, date_to.month, date_to.day + 1))
+        stmt = stmt.where(Post.published_at < datetime(date_to.year, date_to.month, date_to.day) + timedelta(days=1))
     stmt = stmt.order_by(Post.published_at.desc()).offset(offset).limit(limit)
     rows = (await db.execute(stmt)).all()
     return [_to_post_out(row.Post, row.channel_username, row.channel_title) for row in rows]

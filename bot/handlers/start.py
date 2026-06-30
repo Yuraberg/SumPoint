@@ -1,6 +1,4 @@
 """ /start command handler — saves chat_id for Magic Link login. """
-import asyncio
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes
 from sqlalchemy import select
@@ -55,7 +53,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Greet user and save chat_id for future Magic Link logins."""
     user = update.effective_user
     if user:
-        asyncio.create_task(_save_chat_id(user.id, user.username, user.first_name, user.last_name, update.effective_chat.id))
+        await _save_chat_id(user.id, user.username, user.first_name, user.last_name, update.effective_chat.id)
 
     keyboard = [
         [InlineKeyboardButton("📋 Дайджест сейчас", callback_data="digest_now")],

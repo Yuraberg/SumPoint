@@ -8,6 +8,7 @@ from sqlalchemy import select, or_, text
 from app.database import AsyncSessionLocal
 from app.models.post import Post
 from app.models.channel import Channel
+from app.api.posts import _escape_like
 from app.services.ai_engine import generate_embedding
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
     try:
         # Step 1: ILIKE search on text and summary (fast, exact match)
         async with AsyncSessionLocal() as db:
-            pattern = f"%{query_text}%"
+            pattern = f"%{_escape_like(query_text)}%"
             stmt = (
                 select(
                     Post.text,

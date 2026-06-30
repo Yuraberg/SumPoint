@@ -26,7 +26,7 @@ async def _load_or_create(db, user_id: int, slot: str) -> DigestSchedule:
         sched = DigestSchedule(user_id=user_id, slot=slot, enabled=(slot == "morning"))
         db.add(sched)
         await db.flush()
-        await db.commit()
+        # No commit here — caller commits atomically with all pending changes
     return sched
 
 
@@ -71,7 +71,6 @@ async def toggle_evening(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def _toggle_digest(update: Update, slot: str) -> None:
     query = update.callback_query
-    await query.answer()
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:

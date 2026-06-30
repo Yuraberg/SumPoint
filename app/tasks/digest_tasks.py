@@ -133,8 +133,7 @@ async def _async_fetch_all():
                 user = users_by_id[user_id]
                 ingestion = TelegramIngestion(user.id, user.session_path or "")
                 try:
-                    client = await ingestion._get_client()
-                    await client.get_dialogs()
+                    await ingestion._get_client()
 
                     for channel in channels:
                         was_healthy = channel.last_error is None
@@ -158,11 +157,11 @@ async def _async_fetch_all():
 
                             if was_healthy and user.chat_id:
                                 try:
-                                    bot = _get_bot()
-                                    await bot.send_message(
-                                        chat_id=user.chat_id,
-                                        text=f"⚠️ Канал «{channel.title}» перестал обновляться: {str(e)[:200]}",
-                                    )
+                                    async with _get_bot() as bot:
+                                        await bot.send_message(
+                                            chat_id=user.chat_id,
+                                            text=f"⚠️ Канал «{channel.title}» перестал обновляться: {str(e)[:200]}",
+                                        )
                                 except Exception:
                                     logger.warning("Failed to notify user %s about channel %s failure", user.id, channel.id)
 
@@ -276,11 +275,11 @@ async def _notify_keyword_alerts(db, channel: Channel, post: Post) -> None:
         return
 
     try:
-        bot = _get_bot()
-        await bot.send_message(
-            chat_id=user.chat_id,
-            text=f"🔔 «{channel.title}»: новый пост по словам {', '.join(matched)}\n\n{(post.summary or post.text or '')[:300]}",
-        )
+        async with _get_bot() as bot:
+            await bot.send_message(
+                chat_id=user.chat_id,
+                text=f"🔔 «{channel.title}»: новый пост по словам {', '.join(matched)}\n\n{(post.summary or post.text or '')[:300]}",
+            )
     except Exception:
         logger.warning("Failed to send keyword alert notification to user %s", user.id)
 
@@ -302,9 +301,7 @@ def send_scheduled_digests(slot: str):
 async def _async_send_digests(slot: str):
     from app.models.digest_schedule import DigestSchedule
 
-    bot = _get_bot()
-
-    async with AsyncSessionLocal() as db:
+    async with _get_bot() as bot, AsyncSessionLocal() as db:
         field = User.digest_morning if slot == "morning" else User.digest_evening
         users = (await db.execute(select(User).where(field == True))).scalars().all()   # noqa: E712
 
@@ -341,24 +338,33 @@ def check_and_run_schedules():
 async def _async_check_schedules():
     from croniter import croniter
     from app.models.schedule import Schedule
-    from sqlalchemy import or_
+    from sqlalchemy import or_, update as sa_update
 
     now = datetime.utcnow()
 
     async with AsyncSessionLocal() as db:
-        due = (
-            await db.execute(
-                select(Schedule).where(
-                    Schedule.status == "active",
-                    or_(Schedule.next_run_at <= now, Schedule.next_run_at == None),   # noqa: E711
-                )
+        # SELECT FOR UPDATE SKIP LOCKED: each concurrent worker atomically
+        # claims a different subset of due rows, preventing duplicate firings.
+        result = await db.execute(
+            select(Schedule)
+            .where(
+                Schedule.status == "active",
+                or_(Schedule.next_run_at <= now, Schedule.next_run_at == None),   # noqa: E711
             )
-        ).scalars().all()
+            .with_for_update(skip_locked=True)
+        )
+        due = result.scalars().all()
 
         for sched in due:
-            # Claim the schedule immediately so a concurrent worker picking up
-            # the same due row won't also execute and double-send it.
-            sched.next_run_at = croniter(sched.cron_expr, now).get_next(datetime)
+            try:
+                next_run = croniter(sched.cron_expr, now).get_next(datetime)
+            except Exception as e:
+                logger.error("Invalid cron_expr for schedule %s (%s): %s — disabling", sched.id, sched.name, e)
+                sched.status = "disabled"
+                await db.commit()
+                continue
+
+            sched.next_run_at = next_run
             await db.commit()
             try:
                 await _execute_schedule(db, sched)
@@ -369,8 +375,11 @@ async def _async_check_schedules():
 
 
 async def _execute_schedule(db, sched):
-    bot = _get_bot()
+    async with _get_bot() as bot:
+        await _execute_schedule_with_bot(db, sched, bot)
 
+
+async def _execute_schedule_with_bot(db, sched, bot):
     if sched.schedule_type == "topics":
         await _send_digest_for_user(
             bot, sched.user_id, db, sched.hours_back, sched.categories, sched.model
