@@ -53,11 +53,15 @@ def _get_bot():
 
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
-    Uses await_fallback() to provide the greenlet context SQLAlchemy 2.0+ needs.
+
+    asyncio.run() creates a fresh event loop, executes the coroutine, then
+    runs all remaining callbacks (asyncpg connection-close finalizers) before
+    tearing the loop down. This prevents the MissingGreenlet error that
+    await_fallback() produced because it left asyncpg cleanup callbacks
+    scheduled after its greenlet context had already exited.
     """
-    from sqlalchemy.util import await_fallback
     _dispose_engine()
-    return await_fallback(coro)
+    return asyncio.run(coro)
 
 
 # ── Monitoring: fetch new posts every 5 min ───────────────────────────────────
