@@ -1,44 +1,42 @@
 """Settings / schedule preferences handlers."""
-from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+from app.constants import (
+    AVAILABLE_MODELS,
+    VALID_DIGEST_HOURS,
+    DIGEST_HOURS_LABELS,
+    DIGEST_SLOT_LABELS,
+    MODEL_LABELS,
+)
 from app.database import AsyncSessionLocal
+from app.models.digest_schedule import DigestSchedule
 from app.models.user import User
-from app.models.digest_schedule import DigestSchedule, AVAILABLE_MODELS, VALID_HOURS
-from sqlalchemy import select
+from app.repositories import schedule_repository, user_repository
 
-_SLOT_LABELS = {"morning": "🌅 Утренний (09:00)", "evening": "🌆 Вечерний (21:00)"}
-_HOURS_LABELS = {24: "24 ч", 72: "72 ч", 168: "7 дней"}
-_MODEL_LABELS = {"deepseek-v4-flash": "Flash", "deepseek-v4-pro": "Pro"}
+_SLOT_LABELS = DIGEST_SLOT_LABELS
+_HOURS_LABELS = DIGEST_HOURS_LABELS
+_MODEL_LABELS = MODEL_LABELS
 
 
 async def _load_or_create(db, user_id: int, slot: str) -> DigestSchedule:
-    sched = (
-        await db.execute(
-            select(DigestSchedule).where(
-                DigestSchedule.user_id == user_id,
-                DigestSchedule.slot == slot,
-            )
-        )
-    ).scalar_one_or_none()
+    sched = await schedule_repository.get_digest_slot(db, user_id, slot)
     if sched is None:
         sched = DigestSchedule(user_id=user_id, slot=slot, enabled=(slot == "morning"))
         db.add(sched)
         await db.flush()
-        # No commit here — caller commits atomically with all pending changes
+        # No commit here — caller commits atomically with all pending changes.
     return sched
 
 
 # ── Main settings menu ────────────────────────────────────────────────────────
 
-async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
+async def _render_settings_menu(query) -> None:
+    """Render (edit) the settings menu for the callback's user. Does not call
+    query.answer() so it can be reused after another handler already answered."""
     user_id = query.from_user.id
-
     async with AsyncSessionLocal() as db:
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        user = await user_repository.get_by_id(db, user_id)
         if not user:
             await query.edit_message_text("Пользователь не найден.")
             return
@@ -59,6 +57,12 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
 
+async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await _render_settings_menu(query)
+
+
 # ── Toggle morning / evening ──────────────────────────────────────────────────
 
 async def toggle_morning(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -74,7 +78,7 @@ async def _toggle_digest(update: Update, slot: str) -> None:
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        user = await user_repository.get_by_id(db, user_id)
         if not user:
             user = User(id=user_id, first_name=query.from_user.first_name or "")
             db.add(user)
@@ -89,13 +93,13 @@ async def _toggle_digest(update: Update, slot: str) -> None:
         # Sync with DigestSchedule
         sched = await _load_or_create(db, user_id, slot)
         sched.enabled = flag
-        sched.updated_at = datetime.utcnow()
         await db.commit()
 
     status = "включён" if flag else "отключён"
     label = "утренний" if slot == "morning" else "вечерний"
+    # Single answer with an alert; then re-render (which no longer answers).
     await query.answer(f"{label.capitalize()} дайджест {status}.", show_alert=True)
-    await settings_menu(update, context)
+    await _render_settings_menu(query)
 
 
 # ── Detail menu for a slot ────────────────────────────────────────────────────
@@ -107,10 +111,14 @@ async def schedule_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if slot not in _SLOT_LABELS:
         await query.answer("Некорректные данные.", show_alert=True)
         return
-    user_id = query.from_user.id
+    await _render_detail(query, slot)
 
+
+async def _render_detail(query, slot: str) -> None:
+    user_id = query.from_user.id
     async with AsyncSessionLocal() as db:
         sched = await _load_or_create(db, user_id, slot)
+        await db.commit()
         cur_hours = sched.hours_back
         cur_model = sched.model
 
@@ -120,7 +128,7 @@ async def schedule_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"{'✓ ' if h == cur_hours else ''}{_HOURS_LABELS[h]}",
             callback_data=f"set_hours_{slot}_{h}",
         )
-        for h in VALID_HOURS
+        for h in VALID_DIGEST_HOURS
     ]
     model_row = [
         InlineKeyboardButton(
@@ -148,7 +156,6 @@ async def schedule_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def set_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer()
     # pattern: set_hours_{slot}_{hours}
     try:
         _, _, slot, hours_str = query.data.split("_", 3)
@@ -156,7 +163,7 @@ async def set_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except (ValueError, IndexError):
         await query.answer("Некорректные данные.", show_alert=True)
         return
-    if slot not in _SLOT_LABELS or hours not in VALID_HOURS:
+    if slot not in _SLOT_LABELS or hours not in VALID_DIGEST_HOURS:
         await query.answer("Некорректные данные.", show_alert=True)
         return
     user_id = query.from_user.id
@@ -164,20 +171,16 @@ async def set_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with AsyncSessionLocal() as db:
         sched = await _load_or_create(db, user_id, slot)
         sched.hours_back = hours
-        sched.updated_at = datetime.utcnow()
         await db.commit()
 
-    await query.answer(f"Глубина сбора: {_HOURS_LABELS.get(hours, str(hours))}", show_alert=False)
-    # Refresh the detail menu
-    query.data = f"schedule_detail_{slot}"
-    await schedule_detail(update, context)
+    await query.answer(f"Глубина сбора: {_HOURS_LABELS.get(hours, str(hours))}")
+    await _render_detail(query, slot)
 
 
 # ── Set model ─────────────────────────────────────────────────────────────────
 
 async def set_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    await query.answer()
     # pattern: set_model_{slot}_{model_name}  (model_name may contain hyphens)
     parts = query.data.split("_", 3)  # ["set", "model", slot, model_name]
     if len(parts) != 4:
@@ -192,9 +195,7 @@ async def set_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async with AsyncSessionLocal() as db:
         sched = await _load_or_create(db, user_id, slot)
         sched.model = model_name
-        sched.updated_at = datetime.utcnow()
         await db.commit()
 
-    await query.answer(f"Модель: {_MODEL_LABELS.get(model_name, model_name)}", show_alert=False)
-    query.data = f"schedule_detail_{slot}"
-    await schedule_detail(update, context)
+    await query.answer(f"Модель: {_MODEL_LABELS.get(model_name, model_name)}")
+    await _render_detail(query, slot)

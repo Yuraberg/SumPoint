@@ -3,13 +3,11 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from sqlalchemy import select, or_, text
 
 from app.database import AsyncSessionLocal
-from app.models.post import Post
-from app.models.channel import Channel
-from app.api.posts import _escape_like
+from app.repositories import post_repository
 from app.services.ai_engine import generate_embedding
+from app.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -61,35 +59,17 @@ async def search_next_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def _run_search(user_id: int, query_text: str, category: str | None, offset: int, context: ContextTypes.DEFAULT_TYPE, message) -> None:
     try:
-        # Step 1: ILIKE search on text and summary (fast, exact match)
         async with AsyncSessionLocal() as db:
-            pattern = f"%{_escape_like(query_text)}%"
-            stmt = (
-                select(
-                    Post.text,
-                    Post.summary,
-                    Post.published_at,
-                    Post.category,
-                    Channel.title.label("channel_title"),
-                )
-                .join(Channel, Post.channel_id == Channel.id)
-                .where(Channel.user_id == user_id)
-                .where(
-                    or_(
-                        Post.text.ilike(pattern),
-                        Post.summary.ilike(pattern),
-                    )
-                )
-                .where(Post.is_ad == False)
+            # Step 1: ILIKE search on text and summary (fast, exact match).
+            rows = await post_repository.keyword_search(
+                db, user_id, query_text,
+                limit=_PAGE_SIZE, offset=offset,
+                category=category, include_summary=True,
             )
-            if category:
-                stmt = stmt.where(Post.category == category)
-            stmt = stmt.order_by(Post.published_at.desc()).limit(_PAGE_SIZE).offset(offset)
-            rows = (await db.execute(stmt)).all()
-
-        # Step 2: if ILIKE found nothing (only on the first page), try pgvector semantic search
-        if not rows and offset == 0:
-            rows = await _semantic_search(user_id, query_text)
+            # Step 2: if ILIKE found nothing (only on the first page), fall back
+            # to pgvector semantic search.
+            if not rows and offset == 0:
+                rows = await _semantic_search(db, user_id, query_text)
     except Exception:
         logger.exception("Search failed for query %r", query_text)
         await message.reply_text("⚠️ Ошибка поиска. Попробуйте позже.")
@@ -107,9 +87,11 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
     lines = [f"🔍 *Результаты поиска:* «{query_text}»\n"]
     for row in rows:
         channel = row.channel_title or "—"
-        summary = (row.summary or row.text or "")[:200]
-        date = row.published_at.strftime("%d.%m") if row.published_at else ""
-        cat = row.category or "—"
+        post = getattr(row, "Post", None)
+        summary = ((post.summary if post else row.summary) or (post.text if post else row.text) or "")[:200]
+        published_at = post.published_at if post else row.published_at
+        date = published_at.strftime("%d.%m") if published_at else ""
+        cat = (post.category if post else row.category) or "—"
         sim = getattr(row, "similarity", None)
         if sim is not None:
             pct = max(0, min(1, 1 - float(sim)))  # distance → similarity
@@ -117,9 +99,7 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
         else:
             lines.append(f"• *{channel}* [{cat}]\n  {summary}\n  _{date}_\n")
 
-    text_out = "\n".join(lines)
-    if len(text_out) > 4000:
-        text_out = text_out[:4000] + "\n…"
+    text_out = truncate("\n".join(lines))
 
     context.user_data["search_state"] = {"query_text": query_text, "category": category, "offset": offset}
     reply_markup = None
@@ -129,32 +109,11 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
     await message.reply_text(text_out, parse_mode="Markdown", reply_markup=reply_markup)
 
 
-async def _semantic_search(user_id: int, query: str, limit: int = _PAGE_SIZE) -> list:
+async def _semantic_search(db, user_id: int, query: str, limit: int = _PAGE_SIZE) -> list:
     """Fallback: pgvector cosine distance search via embedding."""
     try:
         embedding = await generate_embedding(query)
     except Exception as e:
         logger.warning("Semantic search embedding failed: %s", e)
         return []
-
-    vec_literal = "[" + ",".join(str(x) for x in embedding) + "]"
-
-    async with AsyncSessionLocal() as db:
-        sql = text("""
-            SELECT p.id, p.channel_id, p.text, p.published_at, p.summary,
-                   p.category, p.is_ad,
-                   c.title AS channel_title,
-                   p.embedding <=> CAST(:query_vec AS vector) AS similarity
-            FROM posts p
-            JOIN channels c ON c.id = p.channel_id
-            WHERE c.user_id = :user_id
-              AND p.is_ad = false
-              AND p.embedding IS NOT NULL
-            ORDER BY similarity
-            LIMIT :lim
-        """)
-        rows = (await db.execute(
-            sql, {"query_vec": vec_literal, "user_id": user_id, "lim": limit}
-        )).all()
-
-    return rows
+    return await post_repository.semantic_search(db, user_id, embedding, limit=limit)

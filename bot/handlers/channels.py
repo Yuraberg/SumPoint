@@ -4,10 +4,11 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models.channel import Channel
+from app.repositories import channel_repository
+from app.utils.text import truncate
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,7 @@ async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_id = update.effective_user.id
 
     async with AsyncSessionLocal() as db:
-        rows = (
-            await db.execute(
-                select(Channel).where(Channel.user_id == user_id).order_by(Channel.title)
-            )
-        ).scalars().all()
+        rows = await channel_repository.get_for_user_ordered(db, user_id)
 
     if not rows:
         await update.message.reply_text(
@@ -39,11 +36,7 @@ async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         lines.append(line)
 
     lines.append("\nУдалить: `/removechannel <id>`")
-    text_out = "\n".join(lines)
-    if len(text_out) > 4000:
-        text_out = text_out[:4000] + "\n…"
-
-    await update.message.reply_text(text_out, parse_mode="Markdown")
+    await update.message.reply_text(truncate("\n".join(lines)), parse_mode="Markdown")
 
 
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -58,7 +51,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user_id = update.effective_user.id
     await update.message.reply_text("⏳ Ищу канал…")
 
-    from app.tasks.digest_tasks import resolve_channel_username
+    from app.tasks.maintenance_tasks import resolve_channel_username
 
     try:
         result = await asyncio.to_thread(
@@ -74,14 +67,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     async with AsyncSessionLocal() as db:
-        existing = (
-            await db.execute(
-                select(Channel).where(
-                    Channel.user_id == user_id,
-                    Channel.telegram_id == result["telegram_id"],
-                )
-            )
-        ).scalar_one_or_none()
+        existing = await channel_repository.get_by_telegram_id(db, user_id, result["telegram_id"])
         if existing:
             await update.message.reply_text(f"Канал *{existing.title}* уже добавлен.", parse_mode="Markdown")
             return
@@ -103,7 +89,7 @@ async def import_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
     await update.message.reply_text("⏳ Импортирую ваши каналы из Telegram, это может занять до пары минут…")
 
-    from app.tasks.digest_tasks import import_channels_for_user
+    from app.tasks.maintenance_tasks import import_channels_for_user
 
     task = import_channels_for_user.apply_async(args=[user_id])
     try:
@@ -141,11 +127,7 @@ async def remove_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     user_id = update.effective_user.id
     async with AsyncSessionLocal() as db:
-        ch = (
-            await db.execute(
-                select(Channel).where(Channel.id == channel_id, Channel.user_id == user_id)
-            )
-        ).scalar_one_or_none()
+        ch = await channel_repository.get_owned(db, channel_id, user_id)
         if not ch:
             await update.message.reply_text("Канал не найден.")
             return

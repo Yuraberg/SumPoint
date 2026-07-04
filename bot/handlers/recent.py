@@ -1,11 +1,10 @@
 """ /recent command — latest posts without searching, optional #category filter. """
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
-from app.models.post import Post
-from app.models.channel import Channel
+from app.repositories import post_repository
+from app.utils.text import truncate
 
 _LIMIT = 5
 
@@ -20,22 +19,9 @@ async def recent_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user_id = update.effective_user.id
 
     async with AsyncSessionLocal() as db:
-        stmt = (
-            select(
-                Post.text,
-                Post.summary,
-                Post.published_at,
-                Post.category,
-                Channel.title.label("channel_title"),
-            )
-            .join(Channel, Post.channel_id == Channel.id)
-            .where(Channel.user_id == user_id)
-            .where(Post.is_ad == False)   # noqa: E712
+        rows = await post_repository.get_recent_for_category(
+            db, user_id, category, limit=_LIMIT
         )
-        if category:
-            stmt = stmt.where(Post.category == category)
-        stmt = stmt.order_by(Post.published_at.desc()).limit(_LIMIT)
-        rows = (await db.execute(stmt)).all()
 
     if not rows:
         msg = "Нет постов." if not category else f"Нет постов в категории *{category}*."
@@ -51,8 +37,4 @@ async def recent_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         cat = row.category or "—"
         lines.append(f"• *{channel}* [{cat}]\n  {summary}\n  _{date}_\n")
 
-    text_out = "\n".join(lines)
-    if len(text_out) > 4000:
-        text_out = text_out[:4000] + "\n…"
-
-    await update.message.reply_text(text_out, parse_mode="Markdown")
+    await update.message.reply_text(truncate("\n".join(lines)), parse_mode="Markdown")

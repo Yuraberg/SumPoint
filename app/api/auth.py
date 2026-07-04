@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated
 from urllib.parse import parse_qs
 
@@ -18,10 +18,18 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.constants import (
+    JWT_ALGORITHM as ALGORITHM,
+    TOKEN_EXPIRE_SECONDS,
+    AUTH_FRESHNESS_SECONDS,
+    MAGIC_LINK_TTL_MINUTES,
+)
 from app.database import get_db
 from app.rate_limit import limiter
 from app.models.user import User
 from app.models.magic_link import MagicLink
+from app.repositories import user_repository
+from app.utils.time import utcnow
 from sqlalchemy import select
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -36,9 +44,6 @@ async def public_config():
         "bot_username": settings.telegram_bot_username,
         "app_base_url": settings.app_base_url,
     }
-
-ALGORITHM = "HS256"
-TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
 
 class TelegramAuthData(BaseModel):
@@ -58,7 +63,7 @@ def _verify_telegram_hash(data: TelegramAuthData) -> bool:
     secret = hashlib.sha256(settings.telegram_bot_token.encode()).digest()
     expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
     # Also check auth_date freshness (within 24 h)
-    if abs(time.time() - data.auth_date) > 86400:
+    if abs(time.time() - data.auth_date) > AUTH_FRESHNESS_SECONDS:
         return False
     return hmac.compare_digest(expected, data.hash)
 
@@ -79,7 +84,7 @@ async def get_current_user(
         user_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    user = await user_repository.get_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
@@ -104,11 +109,10 @@ async def telegram_login_get(
     )
     if not _verify_telegram_hash(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
-    user = (await db.execute(select(User).where(User.id == data.id))).scalar_one_or_none()
-    if not user:
-        user = User(id=data.id, first_name=data.first_name, last_name=data.last_name, username=data.username)
-        db.add(user)
-        await db.flush()
+    user = await user_repository.get_or_create(
+        db, data.id,
+        first_name=data.first_name, last_name=data.last_name, username=data.username,
+    )
     token = _create_jwt(user.id)
     return {"access_token": token, "token_type": "bearer"}
 
@@ -180,25 +184,17 @@ async def miniapp_login(request: Request, data: MiniAppAuthData, db: AsyncSessio
     if not tid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user id")
 
-    user = (await db.execute(select(User).where(User.id == tid))).scalar_one_or_none()
-    if not user:
-        user = User(
-            id=tid,
-            first_name=user_data.get("first_name", ""),
-            last_name=user_data.get("last_name"),
-            username=user_data.get("username"),
-        )
-        db.add(user)
-        await db.flush()
-
+    user = await user_repository.get_or_create(
+        db, tid,
+        first_name=user_data.get("first_name", ""),
+        last_name=user_data.get("last_name"),
+        username=user_data.get("username"),
+    )
     token = _create_jwt(user.id)
     return {"access_token": token, "token_type": "bearer"}
 
 
 # ── Magic Link ────────────────────────────────────────────────────────────────
-
-
-MAGIC_LINK_TTL_MINUTES = 10
 
 
 class MagicLinkRequest(BaseModel):
@@ -239,13 +235,11 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
     try:
         username = data.username.strip().lstrip("@")
 
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-
+        user = await user_repository.get_by_username(db, username)
         if not user or not user.chat_id:
             return generic_message
 
-        expires_at = datetime.utcnow() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
+        expires_at = utcnow() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
         magic = MagicLink(user_id=user.id, expires_at=expires_at)
         db.add(magic)
         await db.flush()
@@ -273,12 +267,13 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
 @limiter.limit("10/minute")
 async def verify_magic_link(request: Request, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Verify a magic link token and return a JWT."""
+    import logging
     try:
         result = await db.execute(
             select(MagicLink).where(
                 MagicLink.token == token,
-                MagicLink.used == False,
-                MagicLink.expires_at > datetime.utcnow(),
+                MagicLink.used.is_(False),
+                MagicLink.expires_at > utcnow(),
             )
         )
         magic = result.scalar_one_or_none()
@@ -292,8 +287,7 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
         magic.used = True
         await db.flush()
 
-        result = await db.execute(select(User).where(User.id == magic.user_id))
-        user = result.scalar_one_or_none()
+        user = await user_repository.get_by_id(db, magic.user_id)
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
@@ -301,8 +295,10 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
         return {"access_token": jwt_token, "token_type": "bearer"}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+    except Exception:
+        # Don't leak internal error detail to the client.
+        logging.getLogger("sumpoint.auth").exception("verify_magic_link failed")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка. Попробуйте позже.")
 
 
 @router.post("/telegram")
@@ -311,17 +307,10 @@ async def telegram_login(request: Request, data: TelegramAuthData, db: AsyncSess
     if not _verify_telegram_hash(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
 
-    user = (await db.execute(select(User).where(User.id == data.id))).scalar_one_or_none()
-    if not user:
-        user = User(
-            id=data.id,
-            first_name=data.first_name,
-            last_name=data.last_name,
-            username=data.username,
-        )
-        db.add(user)
-        await db.flush()
-
+    user = await user_repository.get_or_create(
+        db, data.id,
+        first_name=data.first_name, last_name=data.last_name, username=data.username,
+    )
     token = _create_jwt(user.id)
     return {"access_token": token, "token_type": "bearer"}
 

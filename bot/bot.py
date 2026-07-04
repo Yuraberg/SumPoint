@@ -1,8 +1,10 @@
 """Telegram bot entry point."""
 import logging
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from app.config import get_settings
+from bot.keyboards import WELCOME, main_menu_keyboard
 from bot.handlers.start import start, help_command
 from bot.handlers.search import search_posts, search_next_page
 from bot.handlers.recent import recent_posts
@@ -18,28 +20,25 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def back_main(update, context):
+async def back_main(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Return to the /start main menu."""
-    from bot.handlers.start import WELCOME
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     query = update.callback_query
     await query.answer()
-    keyboard = [
-        [InlineKeyboardButton("📋 Дайджест сейчас", callback_data="digest_now")],
-        [
-            InlineKeyboardButton("🌅 Утренний дайджест", callback_data="toggle_morning"),
-            InlineKeyboardButton("🌆 Вечерний дайджест", callback_data="toggle_evening"),
-        ],
-        [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
-    ]
     await query.edit_message_text(
-        WELCOME, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard)
+        WELCOME, parse_mode="Markdown", reply_markup=main_menu_keyboard(with_web_app=False)
     )
+
+
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log unhandled handler exceptions so they aren't silently swallowed."""
+    logger.exception("Unhandled error while processing update", exc_info=context.error)
 
 
 def main() -> None:
     settings = get_settings()
     app = Application.builder().token(settings.telegram_bot_token).build()
+
+    app.add_error_handler(on_error)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))

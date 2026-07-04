@@ -1,11 +1,15 @@
 """Digest-related bot handlers."""
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from sqlalchemy import select
 
+from app.constants import DEFAULT_DIGEST_HOURS
 from app.database import AsyncSessionLocal
-from app.services.digest_service import build_user_digest
 from app.prompts.classification import CATEGORIES
+from app.repositories import post_repository, schedule_repository
+from app.services.digest_service import build_user_digest
+from app.services.calendar_service import get_upcoming_events
+from app.services.digest_delivery import format_events_message
+from app.utils.text import truncate
 
 
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -14,31 +18,17 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await query.answer()
     await query.edit_message_text("⏳ Генерирую дайджест…")
 
-    from app.models.digest_schedule import DigestSchedule
-
     user_id = query.from_user.id
     async with AsyncSessionLocal() as db:
-        sched = (
-            await db.execute(
-                select(DigestSchedule).where(
-                    DigestSchedule.user_id == user_id,
-                    DigestSchedule.slot == "morning",
-                )
-            )
-        ).scalar_one_or_none()
-
-        hours = sched.hours_back if sched else 24
+        sched = await schedule_repository.get_digest_slot(db, user_id, "morning")
+        hours = sched.hours_back if sched else DEFAULT_DIGEST_HOURS
         categories = sched.categories if (sched and sched.categories) else None
         model = sched.model if sched else None
 
         digest = await build_user_digest(db, user_id, hours=hours, categories=categories, model=model)
 
-    text = digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч."
-    # Telegram messages are max 4096 chars
-    if len(text) > 4000:
-        text = text[:4000] + "\n…"
+    text = truncate(digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч.")
 
-    # Category filter buttons
     buttons = [[InlineKeyboardButton(cat, callback_data=f"filter_{cat}")] for cat in CATEGORIES[:5]]
     buttons.append([InlineKeyboardButton("📅 События", callback_data="events")])
 
@@ -57,29 +47,16 @@ async def filter_by_category(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_id = query.from_user.id
     async with AsyncSessionLocal() as db:
-        from app.models.post import Post
-        from app.models.channel import Channel
-        from sqlalchemy import select
+        rows = await post_repository.get_recent_for_category(db, user_id, category, limit=5)
 
-        stmt = (
-            select(Post)
-            .join(Channel, Post.channel_id == Channel.id)
-            .where(Channel.user_id == user_id)
-            .where(Post.category == category)
-            .where(Post.is_ad == False)   # noqa: E712
-            .order_by(Post.published_at.desc())
-            .limit(5)
-        )
-        posts = (await db.execute(stmt)).scalars().all()
-
-    if not posts:
+    if not rows:
         await query.edit_message_text(f"Нет постов в категории *{category}*.", parse_mode="Markdown")
         return
 
     lines = [f"*{category}* — последние посты:\n"]
-    for p in posts:
-        lines.append(f"• {p.summary or (p.text or '')[:100]}…")
-    await query.edit_message_text("\n".join(lines), parse_mode="Markdown")
+    for row in rows:
+        lines.append(f"• {row.summary or (row.text or '')[:100]}…")
+    await query.edit_message_text(truncate("\n".join(lines)), parse_mode="Markdown")
 
 
 async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -89,22 +66,8 @@ async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     user_id = query.from_user.id
 
     async with AsyncSessionLocal() as db:
-        from app.services.calendar_service import get_upcoming_events
         events = await get_upcoming_events(db, user_id)
 
-    if not events:
-        await query.edit_message_text("📅 Нет предстоящих событий на ближайшие 7 дней.")
-        return
-
-    lines = ["📅 *Предстоящие события:*\n"]
-    for ev in events:
-        date = ev.get("date") or "дата не указана"
-        time_ = ev.get("time") or ""
-        name = ev.get("name") or "Без названия"
-        link = ev.get("link") or ""
-        line = f"• *{name}* — {date} {time_}"
-        if link:
-            line += f" [→]({link})"
-        lines.append(line)
-
-    await query.edit_message_text("\n".join(lines), parse_mode="Markdown")
+    await query.edit_message_text(
+        truncate(format_events_message(events)), parse_mode="Markdown"
+    )
