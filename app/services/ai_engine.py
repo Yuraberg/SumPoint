@@ -28,7 +28,7 @@ settings = get_settings()
 
 _client = AsyncOpenAI(api_key=settings.deepseek_api_key or None, base_url="https://api.deepseek.com")
 
-MODEL = "deepseek-chat"
+MODEL = "deepseek-v4-flash"
 MAX_TOKENS = 512
 
 

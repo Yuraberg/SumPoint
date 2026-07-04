@@ -37,7 +37,7 @@ class ScheduleCreate(BaseModel):
     schedule_type: str = "topics"
     cron_expr: str = "0 9 * * *"
     hours_back: int = 24
-    model: str = "deepseek-chat"
+    model: str = "deepseek-v4-flash"
     categories: list[str] | None = None
 
 

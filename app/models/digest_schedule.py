@@ -3,7 +3,7 @@ from sqlalchemy import BigInteger, Integer, String, Boolean, CheckConstraint, Da
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
-AVAILABLE_MODELS = ["deepseek-chat", "deepseek-reasoner"]
+AVAILABLE_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"]
 VALID_HOURS = [24, 72, 168]
 
 
@@ -21,7 +21,7 @@ class DigestSchedule(Base):
     slot: Mapped[str] = mapped_column(String(16), nullable=False)   # "morning" | "evening"
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     hours_back: Mapped[int] = mapped_column(Integer, default=24)    # 24 | 72 | 168
-    model: Mapped[str] = mapped_column(String(64), default="deepseek-chat")
+    model: Mapped[str] = mapped_column(String(64), default="deepseek-v4-flash")
     categories: Mapped[list | None] = mapped_column(JSON, nullable=True)  # None = all
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

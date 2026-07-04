@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 _SLOT_LABELS = {"morning": "🌅 Утренний (09:00)", "evening": "🌆 Вечерний (21:00)"}
 _HOURS_LABELS = {24: "24 ч", 72: "72 ч", 168: "7 дней"}
-_MODEL_LABELS = {"deepseek-chat": "Flash", "deepseek-reasoner": "Pro"}
+_MODEL_LABELS = {"deepseek-v4-flash": "Flash", "deepseek-v4-pro": "Pro"}
 
 
 async def _load_or_create(db, user_id: int, slot: str) -> DigestSchedule:

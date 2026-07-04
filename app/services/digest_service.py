@@ -19,7 +19,7 @@ async def build_user_digest(
     """Collect recent posts for a user and produce a markdown digest.
 
     categories — if provided, only include posts whose category is in this list.
-    model      — DeepSeek model name; None defaults to deepseek-chat.
+    model      — DeepSeek model name; None defaults to deepseek-v4-flash.
     """
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
