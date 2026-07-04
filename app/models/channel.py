@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+from app.utils.time import utcnow
 
 
 class Channel(Base):
@@ -15,7 +16,7 @@ class Channel(Base):
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)   # AI-assigned
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
