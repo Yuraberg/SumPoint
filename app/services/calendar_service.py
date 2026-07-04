@@ -18,10 +18,16 @@ async def get_upcoming_events(
 ) -> list[dict]:
     """Return events extracted from posts, enriched with channel info and mention counts."""
     stmt = (
-        select(Post, Channel.title.label("channel_title"), Channel.username.label("channel_username"))
+        select(
+            Post.id,
+            Post.events,
+            Post.category,
+            Channel.title.label("channel_title"),
+            Channel.username.label("channel_username"),
+        )
         .join(Channel, Post.channel_id == Channel.id)
         .where(Channel.user_id == user_id)
-        .where(Post.events != None)   # noqa: E711
+        .where(Post.events.isnot(None))
     )
     rows = (await db.execute(stmt)).all()
 
@@ -32,8 +38,13 @@ async def get_upcoming_events(
     # Collect all matching events with context
     raw: list[dict] = []
     for row in rows:
-        post = row.Post
-        for ev in (post.events or []):
+        post_events = row.events
+        post_category = row.category
+        channel_title = row.channel_title
+        channel_username = row.channel_username
+        for ev in (post_events if isinstance(post_events, list) else []):
+            if not isinstance(ev, dict):
+                continue
             ev_date_str = ev.get("date")
             ev_date: date | None = None
             if ev_date_str:
@@ -52,10 +63,9 @@ async def get_upcoming_events(
 
             raw.append({
                 **ev,
-                "_post_id": post.id,
-                "_channel_title": row.channel_title,
-                "_channel_username": row.channel_username,
-                "_post_category": post.category,
+                "_channel_title": channel_title,
+                "_channel_username": channel_username,
+                "_post_category": post_category,
                 "_ev_date_obj": ev_date,
             })
 
