@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from app.config import get_settings
 
 settings = get_settings()
@@ -11,16 +12,23 @@ def _get_engine():
     global _engine
     url = settings.database_url
     if _engine is None:
-        _engine = create_async_engine(url, echo=settings.debug)
+        # NullPool: no pooled connections to close outside the await_fallback()
+        # greenlet context (Celery worker), which otherwise logs spurious
+        # MissingGreenlet errors during pool cleanup.
+        _engine = create_async_engine(url, echo=settings.debug, poolclass=NullPool)
     return _engine
 
 
 def _dispose_engine():
-    """Drop the engine reference without closing connections.
-    Connections will be garbage-collected. This avoids loop-conflict
-    errors when Celery forks worker processes.
+    """Dispose the current engine and drop reference.
+    Must be called before asyncio.run() in Celery tasks.
     """
     global _engine
+    if _engine is not None:
+        try:
+            _engine.sync_engine.dispose()
+        except Exception:
+            pass
     _engine = None
 
 

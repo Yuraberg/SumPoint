@@ -1,7 +1,7 @@
 """Digest-related bot handlers."""
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.services.digest_service import build_user_digest
@@ -9,16 +9,31 @@ from app.prompts.classification import CATEGORIES
 
 
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the user their digest on demand."""
+    """Send the user their digest on demand using their saved schedule preferences."""
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("⏳ Генерирую дайджест…")
 
+    from app.models.digest_schedule import DigestSchedule
+
     user_id = query.from_user.id
     async with AsyncSessionLocal() as db:
-        digest = await build_user_digest(db, user_id)
+        sched = (
+            await db.execute(
+                select(DigestSchedule).where(
+                    DigestSchedule.user_id == user_id,
+                    DigestSchedule.slot == "morning",
+                )
+            )
+        ).scalar_one_or_none()
 
-    text = digest.get("digest_markdown") or "Нет новых постов за последние 24 часа."
+        hours = sched.hours_back if sched else 24
+        categories = sched.categories if (sched and sched.categories) else None
+        model = sched.model if sched else None
+
+        digest = await build_user_digest(db, user_id, hours=hours, categories=categories, model=model)
+
+    text = digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч."
     # Telegram messages are max 4096 chars
     if len(text) > 4000:
         text = text[:4000] + "\n…"

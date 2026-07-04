@@ -11,6 +11,7 @@ from app.database import _dispose_engine, AsyncSessionLocal
 from app.models.user import User
 from app.models.channel import Channel
 from app.models.post import Post
+from app.models.keyword_alert import KeywordAlert
 from app.services.telegram_ingestion import TelegramIngestion
 from app.services.ai_engine import process_post
 
@@ -52,16 +53,15 @@ def _get_bot():
 
 def _run(coro):
     """Run an async coroutine from a sync Celery task.
-    Creates a fresh event loop for each call and disposes the old
-    database engine to avoid fork-related loop conflicts.
+
+    asyncio.run() creates a fresh event loop, executes the coroutine, then
+    runs all remaining callbacks (asyncpg connection-close finalizers) before
+    tearing the loop down. This prevents the MissingGreenlet error that
+    await_fallback() produced because it left asyncpg cleanup callbacks
+    scheduled after its greenlet context had already exited.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        _dispose_engine()
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    _dispose_engine()
+    return asyncio.run(coro)
 
 
 # ── Monitoring: fetch new posts every 5 min ───────────────────────────────────
@@ -133,21 +133,37 @@ async def _async_fetch_all():
                 user = users_by_id[user_id]
                 ingestion = TelegramIngestion(user.id, user.session_path or "")
                 try:
-                    client = await ingestion._get_client()
-                    await client.get_dialogs()
+                    await ingestion._get_client()
 
                     for channel in channels:
+                        was_healthy = channel.last_error is None
                         try:
                             await _fetch_channel(db, ingestion, channel)
                             channel.last_fetched_at = datetime.utcnow()
                             channel.last_error = None
                             await db.commit()
                         except Exception as e:
-                            logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, e)
-                            await db.rollback()
+                            logger.warning("Skipping channel %s (%s): %s", channel.title, channel.telegram_id, str(e)[:200])
+                            try:
+                                await db.rollback()
+                            except Exception:
+                                pass
                             channel.last_error = str(e)[:1000]
                             channel.last_fetched_at = datetime.utcnow()
-                            await db.commit()
+                            try:
+                                await db.commit()
+                            except Exception:
+                                pass
+
+                            if was_healthy and user.chat_id:
+                                try:
+                                    async with _get_bot() as bot:
+                                        await bot.send_message(
+                                            chat_id=user.chat_id,
+                                            text=f"⚠️ Канал «{channel.title}» перестал обновляться: {str(e)[:200]}",
+                                        )
+                                except Exception:
+                                    logger.warning("Failed to notify user %s about channel %s failure", user.id, channel.id)
 
                         # Anti-flood: pause between channels, longer pause between batches
                         channel_index += 1
@@ -157,8 +173,11 @@ async def _async_fetch_all():
                             await asyncio.sleep(_CHANNEL_DELAY)
 
                 except Exception as e:
-                    logger.error("Error fetching for user %s: %s", user.id, e)
-                    await db.rollback()
+                    logger.error("Error fetching for user %s: %s", user.id, str(e)[:200])
+                    try:
+                        await db.rollback()
+                    except Exception:
+                        pass
                 finally:
                     await ingestion.disconnect()
     finally:
@@ -233,6 +252,36 @@ async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> 
                 "Duplicate post %s in channel %s skipped (race with another run)",
                 raw_post["telegram_message_id"], channel.title,
             )
+            continue
+
+        await _notify_keyword_alerts(db, channel, post)
+
+
+async def _notify_keyword_alerts(db, channel: Channel, post: Post) -> None:
+    """Notify the channel owner if a keyword alert matches the new post."""
+    alerts = (
+        await db.execute(select(KeywordAlert).where(KeywordAlert.user_id == channel.user_id))
+    ).scalars().all()
+    if not alerts:
+        return
+
+    haystack = f"{post.text or ''} {post.summary or ''}".lower()
+    matched = [a.keyword for a in alerts if a.keyword in haystack]
+    if not matched:
+        return
+
+    user = (await db.execute(select(User).where(User.id == channel.user_id))).scalar_one_or_none()
+    if not user or not user.chat_id:
+        return
+
+    try:
+        async with _get_bot() as bot:
+            await bot.send_message(
+                chat_id=user.chat_id,
+                text=f"🔔 «{channel.title}»: новый пост по словам {', '.join(matched)}\n\n{(post.summary or post.text or '')[:300]}",
+            )
+    except Exception:
+        logger.warning("Failed to send keyword alert notification to user %s", user.id)
 
 
 # ── Scheduled digests (09:00 and 21:00 UTC) ──────────────────────────────────
@@ -252,9 +301,7 @@ def send_scheduled_digests(slot: str):
 async def _async_send_digests(slot: str):
     from app.models.digest_schedule import DigestSchedule
 
-    bot = _get_bot()
-
-    async with AsyncSessionLocal() as db:
+    async with _get_bot() as bot, AsyncSessionLocal() as db:
         field = User.digest_morning if slot == "morning" else User.digest_evening
         users = (await db.execute(select(User).where(field == True))).scalars().all()   # noqa: E712
 
@@ -291,24 +338,33 @@ def check_and_run_schedules():
 async def _async_check_schedules():
     from croniter import croniter
     from app.models.schedule import Schedule
-    from sqlalchemy import or_
+    from sqlalchemy import or_, update as sa_update
 
     now = datetime.utcnow()
 
     async with AsyncSessionLocal() as db:
-        due = (
-            await db.execute(
-                select(Schedule).where(
-                    Schedule.status == "active",
-                    or_(Schedule.next_run_at <= now, Schedule.next_run_at == None),   # noqa: E711
-                )
+        # SELECT FOR UPDATE SKIP LOCKED: each concurrent worker atomically
+        # claims a different subset of due rows, preventing duplicate firings.
+        result = await db.execute(
+            select(Schedule)
+            .where(
+                Schedule.status == "active",
+                or_(Schedule.next_run_at <= now, Schedule.next_run_at == None),   # noqa: E711
             )
-        ).scalars().all()
+            .with_for_update(skip_locked=True)
+        )
+        due = result.scalars().all()
 
         for sched in due:
-            # Claim the schedule immediately so a concurrent worker picking up
-            # the same due row won't also execute and double-send it.
-            sched.next_run_at = croniter(sched.cron_expr, now).get_next(datetime)
+            try:
+                next_run = croniter(sched.cron_expr, now).get_next(datetime)
+            except Exception as e:
+                logger.error("Invalid cron_expr for schedule %s (%s): %s — disabling", sched.id, sched.name, e)
+                sched.status = "disabled"
+                await db.commit()
+                continue
+
+            sched.next_run_at = next_run
             await db.commit()
             try:
                 await _execute_schedule(db, sched)
@@ -319,8 +375,11 @@ async def _async_check_schedules():
 
 
 async def _execute_schedule(db, sched):
-    bot = _get_bot()
+    async with _get_bot() as bot:
+        await _execute_schedule_with_bot(db, sched, bot)
 
+
+async def _execute_schedule_with_bot(db, sched, bot):
     if sched.schedule_type == "topics":
         await _send_digest_for_user(
             bot, sched.user_id, db, sched.hours_back, sched.categories, sched.model

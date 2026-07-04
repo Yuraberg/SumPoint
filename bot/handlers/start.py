@@ -1,6 +1,4 @@
 """ /start command handler — saves chat_id for Magic Link login. """
-import asyncio
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes
 from sqlalchemy import select
@@ -25,11 +23,37 @@ WELCOME = (
 )
 
 
+HELP_TEXT = (
+    "🛟 *Команды SumPoint*\n\n"
+    "*Посты*\n"
+    "• `/recent` — последние посты\n"
+    "• `/recent #Категория` — последние посты по теме\n"
+    "• `/search <текст>` — поиск по постам\n"
+    "• `/search <текст> #Категория` — поиск с фильтром по теме\n\n"
+    "*Каналы*\n"
+    "• `/channels` — список ваших каналов и их статус\n"
+    "• `/addchannel @username` — добавить канал\n"
+    "• `/removechannel <id>` — удалить канал\n"
+    "• `/import` — импортировать все подписки из Telegram\n\n"
+    "*Алерты*\n"
+    "• `/alert add <слово>` — уведомлять о новых постах со словом\n"
+    "• `/alert remove <слово>` — удалить алерт\n"
+    "• `/alert list` — список алертов\n\n"
+    "*Прочее*\n"
+    "• `/start` — главное меню\n"
+    "• `/help` — это сообщение"
+)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(HELP_TEXT, parse_mode="Markdown")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Greet user and save chat_id for future Magic Link logins."""
     user = update.effective_user
     if user:
-        asyncio.create_task(_save_chat_id(user.id, user.username, user.first_name, user.last_name, update.effective_chat.id))
+        await _save_chat_id(user.id, user.username, user.first_name, user.last_name, update.effective_chat.id)
 
     keyboard = [
         [InlineKeyboardButton("📋 Дайджест сейчас", callback_data="digest_now")],
