@@ -7,6 +7,7 @@ All prompts follow the spec:
   - Few-Shot examples (in classification prompt)
   - Delimiters (### and \"\"\")
 """
+import asyncio
 import json
 import logging
 import re
@@ -16,6 +17,7 @@ import httpx
 from openai import AsyncOpenAI
 
 from app.config import get_settings
+from app.constants import EMBEDDING_DIM
 from app.prompts import (
     build_classification_prompt,
     build_summarization_prompt,
@@ -26,10 +28,28 @@ from app.prompts.classification import CATEGORIES
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-_client = AsyncOpenAI(api_key=settings.deepseek_api_key or None, base_url="https://api.deepseek.com")
-
-MODEL = "deepseek-v4-flash"
+MODEL = settings.deepseek_model
 MAX_TOKENS = 512
+
+# The DeepSeek client wraps an httpx session bound to the event loop it is first
+# used on. Celery runs each task in a fresh loop (asyncio.run), so a single
+# module-level client would raise "Event loop is closed" on the second task.
+# Cache the client per running loop and rebuild it when the loop changes.
+_client: AsyncOpenAI | None = None
+_client_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_client() -> AsyncOpenAI:
+    global _client, _client_loop
+    loop = asyncio.get_running_loop()
+    if _client is None or _client_loop is not loop:
+        _client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key or None,
+            base_url=settings.deepseek_base_url,
+            max_retries=3,
+        )
+        _client_loop = loop
+    return _client
 
 
 def _strip_thought(raw: str) -> str:
@@ -43,12 +63,19 @@ def _strip_thought(raw: str) -> str:
 
 async def _call(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None) -> str:
     """Send a prompt to DeepSeek and return the text response."""
-    response = await _client.chat.completions.create(
+    response = await _get_client().chat.completions.create(
         model=model or MODEL,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.choices[0].message.content.strip()
+
+
+async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
+    """Public entry point for digest assembly — keeps callers out of ``_call``."""
+    from app.prompts.summarization import build_digest_prompt
+
+    return await _call(build_digest_prompt(summaries), max_tokens=4096, model=model)
 
 
 async def classify_post(text: str) -> str:
@@ -100,7 +127,7 @@ async def generate_embedding(text: str) -> list[float]:
         return vec
     except Exception as e:
         logger.warning("Ollama BGE-M3 embedding failed: %s — using zero-vector fallback", e)
-        return [0.0] * 1024
+        return [0.0] * EMBEDDING_DIM
 
 
 async def process_post(text: str, channel_title: str) -> dict[str, Any] | None:

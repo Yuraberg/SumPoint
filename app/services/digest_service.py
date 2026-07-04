@@ -1,45 +1,39 @@
 """Build daily digest from stored posts."""
-from datetime import datetime, timedelta
-from sqlalchemy import select
+from datetime import timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.post import Post
-from app.models.channel import Channel
-from app.prompts.summarization import build_digest_prompt
-from app.services.ai_engine import _call
+from app.constants import DEFAULT_DIGEST_HOURS
+from app.repositories import post_repository
+from app.services.ai_engine import generate_digest_text
+from app.utils.time import utcnow
 
 
 async def build_user_digest(
     db: AsyncSession,
     user_id: int,
-    hours: int = 24,
+    hours: int = DEFAULT_DIGEST_HOURS,
     categories: list[str] | None = None,
     model: str | None = None,
 ) -> dict:
     """Collect recent posts for a user and produce a markdown digest.
 
     categories — if provided, only include posts whose category is in this list.
-    model      — DeepSeek model name; None defaults to deepseek-v4-flash.
+    model      — DeepSeek model name; None defaults to the configured model.
     """
-    cutoff = datetime.utcnow() - timedelta(hours=hours)
-
-    stmt = (
-        select(Post, Channel.title.label("channel_title"))
-        .join(Channel, Post.channel_id == Channel.id)
-        .where(Channel.user_id == user_id)
-        .where(Post.published_at >= cutoff)
-        .where(Post.is_ad == False)       # noqa: E712
-        .where(Post.summary != None)      # noqa: E711
-        .order_by(Post.published_at.desc())
+    cutoff = utcnow() - timedelta(hours=hours)
+    rows = await post_repository.get_digest_feed(
+        db, user_id, since=cutoff, categories=categories
     )
-    if categories:
-        stmt = stmt.where(Post.category.in_(categories))
-
-    rows = (await db.execute(stmt)).all()
 
     if not rows:
-        return {"generated_at": datetime.utcnow(), "user_id": user_id, "posts": [], "events": [],
-                "digest_markdown": None}
+        return {
+            "generated_at": utcnow(),
+            "user_id": user_id,
+            "posts": [],
+            "events": [],
+            "digest_markdown": None,
+        }
 
     summaries = [
         {
@@ -50,7 +44,7 @@ async def build_user_digest(
         for row in rows
     ]
 
-    digest_text = await _call(build_digest_prompt(summaries), max_tokens=4096, model=model)
+    digest_text = await generate_digest_text(summaries, model=model)
 
     all_events: list = []
     for row in rows:
@@ -73,7 +67,7 @@ async def build_user_digest(
     ]
 
     return {
-        "generated_at": datetime.utcnow(),
+        "generated_at": utcnow(),
         "user_id": user_id,
         "digest_markdown": digest_text,
         "posts": posts_out,
