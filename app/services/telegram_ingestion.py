@@ -19,20 +19,18 @@ from telethon.sessions import StringSession
 from telethon.tl.types import Message, Channel as TLChannel
 
 from app.config import get_settings
+from app.constants import AD_KEYWORDS, FETCH_HISTORY_HOURS, FETCH_MESSAGE_LIMIT
 from app.services.encryption import load_decrypted, save_encrypted
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-# Heuristics for ad detection
-_AD_KEYWORDS = {"реклама", "спонсор", "промокод", "скидка", "#реклама", "#ad", "#sponsor", "партнёрский"}
 
 
 def _is_ad(text: str) -> bool:
     if not text:
         return False
     lower = text.lower()
-    return any(kw in lower for kw in _AD_KEYWORDS)
+    return any(kw in lower for kw in AD_KEYWORDS)
 
 
 def _content_hash(text: str) -> str:
@@ -112,7 +110,9 @@ class TelegramIngestion:
 
     # ── Historical fetch ───────────────────────────────────────────────────────
 
-    async def fetch_recent_posts(self, channel_id: int, hours: int = 24) -> AsyncIterator[dict]:
+    async def fetch_recent_posts(
+        self, channel_id: int, hours: int = FETCH_HISTORY_HOURS
+    ) -> AsyncIterator[dict]:
         """Yield posts from the last `hours` hours, pre-filtered.
 
         Adds a 0.3s pause every 30 messages to avoid Telegram flood limits.
@@ -120,7 +120,7 @@ class TelegramIngestion:
         client = await self._get_client()
         cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
         fetched = 0
-        async for msg in client.iter_messages(channel_id, limit=500):
+        async for msg in client.iter_messages(channel_id, limit=FETCH_MESSAGE_LIMIT):
             if not isinstance(msg, Message):
                 continue
             if msg.date < cutoff:

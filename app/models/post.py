@@ -3,8 +3,8 @@ from sqlalchemy import BigInteger, String, Boolean, DateTime, ForeignKey, Text, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from app.database import Base
-
-EMBEDDING_DIM = 1024  # bge-m3 (sentence-transformers)
+from app.constants import EMBEDDING_DIM  # noqa: F401  (re-exported)
+from app.utils.time import utcnow
 
 
 class Post(Base):
@@ -36,6 +36,6 @@ class Post(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     channel: Mapped["Channel"] = relationship("Channel", back_populates="posts")

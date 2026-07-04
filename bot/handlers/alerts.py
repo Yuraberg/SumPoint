@@ -1,11 +1,11 @@
 """/alert command — manage keyword alerts, triggered when a new matching post arrives."""
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.database import AsyncSessionLocal
 from app.models.keyword_alert import KeywordAlert
+from app.repositories import alert_repository
 
 _MAX_ALERTS = 20
 
@@ -29,11 +29,7 @@ async def manage_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if action == "list":
         async with AsyncSessionLocal() as db:
-            rows = (
-                await db.execute(
-                    select(KeywordAlert).where(KeywordAlert.user_id == user_id).order_by(KeywordAlert.keyword)
-                )
-            ).scalars().all()
+            rows = await alert_repository.list_for_user(db, user_id)
         if not rows:
             await update.message.reply_text("🔔 У вас нет активных алертов.")
             return
@@ -48,9 +44,7 @@ async def manage_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if action == "add":
         async with AsyncSessionLocal() as db:
-            count = len(
-                (await db.execute(select(KeywordAlert).where(KeywordAlert.user_id == user_id))).scalars().all()
-            )
+            count = await alert_repository.count_for_user(db, user_id)
             if count >= _MAX_ALERTS:
                 await update.message.reply_text(f"⚠️ Лимит алертов — {_MAX_ALERTS}.")
                 return
@@ -65,13 +59,7 @@ async def manage_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if action == "remove":
         async with AsyncSessionLocal() as db:
-            alert = (
-                await db.execute(
-                    select(KeywordAlert).where(
-                        KeywordAlert.user_id == user_id, KeywordAlert.keyword == keyword
-                    )
-                )
-            ).scalar_one_or_none()
+            alert = await alert_repository.get(db, user_id, keyword)
             if not alert:
                 await update.message.reply_text(f"Алерт «{keyword}» не найден.")
                 return

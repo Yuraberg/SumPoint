@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
+from app.constants import DEFAULT_MODEL
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -15,6 +17,8 @@ class Settings(BaseSettings):
 
     # DeepSeek
     deepseek_api_key: str = ""
+    deepseek_model: str = DEFAULT_MODEL
+    deepseek_base_url: str = "https://api.deepseek.com"
 
     # Ollama (embeddings)
     ollama_base_url: str = "http://172.20.0.1:11434"

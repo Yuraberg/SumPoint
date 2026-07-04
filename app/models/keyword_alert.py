@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Integer, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
+from app.utils.time import utcnow
 
 
 class KeywordAlert(Base):
@@ -15,4 +16,4 @@ class KeywordAlert(Base):
         BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     keyword: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
