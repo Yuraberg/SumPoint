@@ -8,7 +8,12 @@ celery_app = Celery(
     "sumpoint",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.digest_tasks"],
+    include=[
+        "app.tasks.digest_tasks",
+        "app.tasks.fetch_tasks",
+        "app.tasks.schedule_tasks",
+        "app.tasks.maintenance_tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -31,18 +36,18 @@ celery_app.conf.beat_schedule = {
         "args": ["evening"],
     },
     "fetch-new-posts": {
-        "task": "app.tasks.digest_tasks.fetch_all_channels",
+        "task": "app.tasks.fetch_tasks.fetch_all_channels",
         # Runs continuously but only processes a small slice of channels per
         # run (oldest last_fetched_at first) — keeps Telethon polling spread
         # out instead of bursting through everything at once.
         "schedule": settings.posts_fetch_interval_minutes * 60.0,
     },
     "check-schedules": {
-        "task": "app.tasks.digest_tasks.check_and_run_schedules",
+        "task": "app.tasks.schedule_tasks.check_and_run_schedules",
         "schedule": 60.0,  # every minute
     },
     "uptime-kuma-heartbeat": {
-        "task": "app.tasks.digest_tasks.uptime_kuma_heartbeat",
+        "task": "app.tasks.maintenance_tasks.uptime_kuma_heartbeat",
         "schedule": 300.0,  # every 5 minutes
     },
 }
