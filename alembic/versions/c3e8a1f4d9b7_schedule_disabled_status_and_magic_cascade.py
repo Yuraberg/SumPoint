@@ -21,7 +21,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # ── schedules.status CHECK: add 'disabled' ────────────────────────────────
-    op.drop_constraint("ck_schedules_status", "schedules", type_="check")
+    # Drop any existing check constraint on schedules — the name may be
+    # auto-generated on some Postgres versions so we can't rely on a fixed name.
+    op.execute(
+        "DO $$DECLARE cn TEXT; BEGIN "
+        "SELECT conname INTO cn FROM pg_constraint "
+        "WHERE conrelid = 'schedules'::regclass AND contype = 'c' LIMIT 1; "
+        "IF cn IS NOT NULL THEN EXECUTE 'ALTER TABLE schedules DROP CONSTRAINT ' || cn; "
+        "END IF; END$$;"
+    )
     op.create_check_constraint(
         "ck_schedules_status",
         "schedules",

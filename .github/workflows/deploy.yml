@@ -6,7 +6,33 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-test-secret-key
+      SESSION_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TELEGRAM_BOT_TOKEN: "123456:ci-test-token"
+      DEEPSEEK_API_KEY: ci-test-key
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Byte-compile sources
+        run: python -m py_compile $(find app bot -name "*.py")
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -18,8 +44,23 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd /root/vps-new/sumpoint
-            git pull --rebase origin main
+            git fetch origin main
+            git reset --hard origin/main
             cd /root/vps-new
             docker compose --env-file .env up -d --build sumpoint-api sumpoint-worker sumpoint-beat
-            sleep 6
-            docker compose logs --tail=20 sumpoint-api
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            echo "Waiting for containers to start..."
+            sleep 20
+            curl -sf http://localhost:8000/health || (echo "API health check FAILED" && exit 1)
+            docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || (echo "Worker not running" && exit 1)
+            docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || (echo "Beat not running" && exit 1)
+            echo "All services healthy"
+            docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml logs --tail=20 sumpoint-api
