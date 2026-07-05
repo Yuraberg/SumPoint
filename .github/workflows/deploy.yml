@@ -1,0 +1,25 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd /root/vps-new/sumpoint
+            git pull origin main
+            cd /root/vps-new
+            docker compose -f dc2.yml --env-file .env up -d --build sumpoint-api sumpoint-worker sumpoint-beat
+            sleep 6
+            docker compose -f dc2.yml logs --tail=20 sumpoint-api
