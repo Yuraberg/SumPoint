@@ -17,6 +17,9 @@ from bot.handlers.settings import (
 )
 
 logging.basicConfig(level=logging.INFO)
+# httpx logs full request URLs at INFO — suppressed to avoid leaking the bot
+# token (embedded in every Telegram Bot API URL) to docker logs / log shippers.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
