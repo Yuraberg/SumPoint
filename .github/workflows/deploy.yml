@@ -18,8 +18,8 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd /root/vps-new/sumpoint
-            git pull origin main
+            git pull --rebase origin main
             cd /root/vps-new
-            docker compose -f dc2.yml --env-file .env up -d --build sumpoint-api sumpoint-worker sumpoint-beat
+            docker compose --env-file .env up -d --build sumpoint-api sumpoint-worker sumpoint-beat
             sleep 6
-            docker compose -f dc2.yml logs --tail=20 sumpoint-api
+            docker compose logs --tail=20 sumpoint-api
