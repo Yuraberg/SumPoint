@@ -87,6 +87,11 @@ class TelegramIngestion:
         self._client = client
         return client
 
+    async def connect(self) -> None:
+        """Public wrapper around _get_client() — ensures the session is
+        connected and authorized before callers proceed with fetching."""
+        await self._get_client()
+
     async def disconnect(self) -> None:
         if self._client:
             await self._client.disconnect()

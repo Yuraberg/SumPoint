@@ -38,6 +38,11 @@ MAX_TOKENS = 512
 _client: AsyncOpenAI | None = None
 _client_loop: asyncio.AbstractEventLoop | None = None
 
+# Same per-loop caching for the Ollama embedding client — avoids opening a
+# fresh TCP connection for every single post in a fetch batch.
+_embed_client: httpx.AsyncClient | None = None
+_embed_client_loop: asyncio.AbstractEventLoop | None = None
+
 
 def _get_client() -> AsyncOpenAI:
     global _client, _client_loop
@@ -50,6 +55,15 @@ def _get_client() -> AsyncOpenAI:
         )
         _client_loop = loop
     return _client
+
+
+def _get_embed_client() -> httpx.AsyncClient:
+    global _embed_client, _embed_client_loop
+    loop = asyncio.get_running_loop()
+    if _embed_client is None or _embed_client_loop is not loop:
+        _embed_client = httpx.AsyncClient(timeout=60)
+        _embed_client_loop = loop
+    return _embed_client
 
 
 def _strip_thought(raw: str) -> str:
@@ -118,10 +132,9 @@ async def generate_embedding(text: str) -> list[float]:
     url = f"{settings.ollama_base_url}/api/embeddings"
     body = {"model": "bge-m3", "prompt": text[:8000]}
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(url, json=body)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await _get_embed_client().post(url, json=body)
+        resp.raise_for_status()
+        data = resp.json()
         vec = data["embedding"]
         logger.info("Embedding generated (%d dims) via Ollama BGE-M3", len(vec))
         return vec
@@ -133,13 +146,22 @@ async def generate_embedding(text: str) -> list[float]:
 async def process_post(text: str, channel_title: str) -> dict[str, Any] | None:
     """Full AI pipeline for one post. Returns enriched fields, or None if
     DeepSeek is unavailable — callers should skip the post and continue
-    with the rest of the batch rather than aborting the whole fetch."""
+    with the rest of the batch rather than aborting the whole fetch.
+
+    classify/summarise/extract/embed don't depend on each other's output, so
+    they run concurrently instead of as four sequential round-trips."""
     try:
+        category, summary, events, embedding = await asyncio.gather(
+            classify_post(text),
+            summarise_post(text, channel_title),
+            extract_events(text),
+            generate_embedding(text),
+        )
         return {
-            "category": await classify_post(text),
-            "summary": await summarise_post(text, channel_title),
-            "events": await extract_events(text),
-            "embedding": await generate_embedding(text),
+            "category": category,
+            "summary": summary,
+            "events": events,
+            "embedding": embedding,
         }
     except Exception:
         logger.exception("process_post failed; skipping this post")

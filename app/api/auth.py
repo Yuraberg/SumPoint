@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import time
+import uuid
 from datetime import timedelta
 from typing import Annotated
 from urllib.parse import parse_qs
@@ -240,9 +241,11 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
             return generic_message
 
         expires_at = utcnow() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
-        magic = MagicLink(user_id=user.id, expires_at=expires_at)
-        db.add(magic)
-        await db.flush()
+        # Generate the token upfront (rather than relying on the column default,
+        # which only fires on flush) so we can send it and persist the row only
+        # if the send actually succeeds — avoids ever committing a link the
+        # user never received.
+        magic = MagicLink(user_id=user.id, expires_at=expires_at, token=uuid.uuid4().hex)
 
         login_url = f"{settings.app_base_url}/?token={magic.token}"
         sent = await _send_telegram_message(
@@ -252,8 +255,8 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
             f"Ссылка действительна {MAGIC_LINK_TTL_MINUTES} минут.",
         )
 
-        if not sent:
-            await db.delete(magic)
+        if sent:
+            db.add(magic)
             await db.flush()
 
         return generic_message

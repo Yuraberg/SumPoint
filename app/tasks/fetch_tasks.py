@@ -99,7 +99,7 @@ async def _fetch_user_channels(
     running channel counter so batch pauses stay global across users."""
     ingestion = TelegramIngestion(user.id, user.session_path or "")
     try:
-        await ingestion._get_client()
+        await ingestion.connect()
 
         for channel in channels:
             was_healthy = channel.last_error is None

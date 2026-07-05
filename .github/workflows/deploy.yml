@@ -47,7 +47,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cd /root/vps-new
-            docker compose --env-file .env up -d --build sumpoint-api sumpoint-worker sumpoint-beat
+            docker compose --env-file .env up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -59,7 +59,11 @@ jobs:
           script: |
             echo "Waiting for containers to start..."
             sleep 20
-            curl -sf http://localhost:8000/health || (echo "API health check FAILED" && exit 1)
+            # sumpoint-api has no host-published port on the VPS — the app is only
+            # reachable through Caddy, so the health check runs inside the container.
+            docker exec sumpoint-api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)" \
+              || (echo "API health check FAILED" && exit 1)
+            docker inspect sumpoint-bot --format '{{.State.Status}}' | grep -q running || (echo "Bot not running" && exit 1)
             docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || (echo "Worker not running" && exit 1)
             docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || (echo "Beat not running" && exit 1)
             echo "All services healthy"

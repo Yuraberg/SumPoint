@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     secret_key: str
     session_encryption_key: str = ""
 
-    # CORS — comma-separated list of allowed origins
-    cors_origins: str = "http://localhost:8000,http://localhost:8001"
+    # CORS — JSON array of allowed origins, e.g. ["https://sum.procpoint.ru"]
+    cors_origins: list[str] = ["http://localhost:8000", "http://localhost:8001"]
 
     # Public app URL (used in magic-link / mini-app links) and bot username
     app_base_url: str = "http://localhost:8001"

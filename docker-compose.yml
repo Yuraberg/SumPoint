@@ -26,7 +26,7 @@ services:
   api:
     build: .
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
     ports:
       - "8001:8000"
     networks:
@@ -41,7 +41,7 @@ services:
       - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
       - SECRET_KEY=${SECRET_KEY}
       - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8001}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:8001"]}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
       - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
     volumes:

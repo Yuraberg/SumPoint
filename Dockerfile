@@ -18,6 +18,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# procps — provides pgrep, used by the bot/worker/beat healthchecks in
+# docker-compose.yml (image has no process-monitoring tools by default).
+RUN apt-get update && apt-get install -y --no-install-recommends procps \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /install /usr/local
 COPY . .
 
