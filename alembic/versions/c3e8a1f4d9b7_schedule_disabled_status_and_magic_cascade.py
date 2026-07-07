@@ -21,15 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # ── schedules.status CHECK: add 'disabled' ────────────────────────────────
-    # Drop any existing check constraint on schedules — the name may be
-    # auto-generated on some Postgres versions so we can't rely on a fixed name.
-    op.execute(
-        "DO $$DECLARE cn TEXT; BEGIN "
-        "SELECT conname INTO cn FROM pg_constraint "
-        "WHERE conrelid = 'schedules'::regclass AND contype = 'c' LIMIT 1; "
-        "IF cn IS NOT NULL THEN EXECUTE 'ALTER TABLE schedules DROP CONSTRAINT ' || cn; "
-        "END IF; END$$;"
-    )
+    # Drop ONLY the status check by its explicit name (set in the initial schema
+    # and the model). Do NOT match "any check constraint on schedules" — the
+    # table also has ck_schedules_type, and a LIMIT-1 lookup can drop that one
+    # instead, after which recreating ck_schedules_status fails because it still
+    # exists. IF EXISTS keeps this idempotent across re-runs.
+    op.execute("ALTER TABLE schedules DROP CONSTRAINT IF EXISTS ck_schedules_status")
     op.create_check_constraint(
         "ck_schedules_status",
         "schedules",
