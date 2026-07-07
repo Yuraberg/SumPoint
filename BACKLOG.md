@@ -17,7 +17,6 @@ _Пусто_
   - MV: вакансии для руководителей (1786476533)
   - УмноЖение | HR (2379622882)
   - Юля, у нас оффер! (1533183411)
-- [ ] **Healthcheck для бота** — добавить `healthcheck` в docker-compose (репо) и `dc2.yml` (VPS) для `sumpoint-api`: проверять `pgrep -f 'python -m bot.bot'`.
 - [ ] **Автокатегоризация постов** — классификация по рубрикам через LLM (DeepSeek). Пост → LLM → категория → сохранение в БД.
 - [ ] **RAG (Retrieval-Augmented Generation)** — чат-интерфейс для вопросов по постам. Семантический поиск + LLM для ответа.
 
@@ -43,7 +42,9 @@ _Пусто_
 ## Решённые / Закрытые
 
 - [x] **MissingGreenlet в Celery** (2026-06-28, `022c005`) — `_run()` переведён на `await_fallback()` вместо ручного event loop. Обработчики ошибок безопасны (str(e)[:200], try/except на rollback/commit). `_dispose_engine()` корректно закрывает пул.
-- [x] **Бот не запущен** (2026-06-28) — `bot/bot.py` не вызывался из `main.py` и не было отдельного контейнера. Добавлен `python -m bot.bot &` в команду `sumpoint-api` (`dc2.yml`).
+- [x] **Бот не запущен** (2026-06-28) — `bot/bot.py` не вызывался из `main.py` и не было отдельного контейнера. Добавлен отдельный сервис `bot` в `docker-compose.yml`.
+- [x] **Healthcheck для всех сервисов** (2026-07-05) — `docker-compose.yml` теперь содержит `healthcheck` для `api`, `bot`, `worker`, `beat`.
+- [x] **dc2.yml удалён** (2026-06-29) — VPS больше не хранит отдельный compose-файл; Coolify деплоит напрямую из `docker-compose.yml` в репозитории.
 - [x] **TELEGRAM_BOT_TOKEN** (2026-06-28) — Pydantic ждал `TELEGRAM_BOT_TOKEN`, а в `.env` было `SUMPOINT_BOT_TOKEN`. Добавлен `TELEGRAM_BOT_TOKEN` в `.env`.
 - [x] **Celery worker pool** (2026-06-28) — `--pool=threads` конфликтовал с async SQLAlchemy. Переведён на `--pool=solo`.
 - [x] **Семантический поиск** — pgvector + BGE-M3 эмбеддинги через Ollama.
