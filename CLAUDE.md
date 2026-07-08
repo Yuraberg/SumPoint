@@ -185,3 +185,30 @@ Backups are stored in `./backups/` by default (override with `BACKUP_DIR`).
 - `posts.published_at` is `TIMESTAMP WITHOUT TIME ZONE` — always strip `tzinfo` before inserting (`pub_at.replace(tzinfo=None)`).
 - `posts.embedding` is `pgvector Vector(1024)` (BGE-M3 dimension), populated by `generate_embedding()` during AI processing.
 - Schema is owned exclusively by Alembic — the app does **not** create or migrate tables at startup. Always run `alembic upgrade head` before starting the API/worker/bot (see `docker-compose.yml`'s `api` command).
+
+## Production Readiness Backlog
+
+### Первая волна («Да»)
+
+| # | Этап | Статус | Файлы |
+|---|------|--------|-------|
+| 1A | `.env.example` — все переменные с подсказками | ✅ | `.env.example` |
+| 2A | HEALTHCHECK + `/api/v1/health` (DB + Redis) | ✅ | `Dockerfile`, `app/api/health.py`, `app/api/router.py` |
+| 3A | `ruff` + `pip-audit` в CI | ✅ | `.github/workflows/deploy.yml`, `pyproject.toml` |
+| 4A | CORS — warning о localhost в проде | ✅ | `app/main.py` |
+| 4Б | Rate limit на `/auth/*` (slowapi) | ✅ | Уже был, без изменений |
+| 5A | Uptime Kuma — 3 монитора + алерты | ✅ | `CLAUDE.md` (документация) |
+| 6В | `LOG_LEVEL` + глушение шумных библиотек | ✅ | `app/config.py`, `app/main.py` |
+| 7А | `pg_dump` бэкап + cron (7 дней) | ✅ | `scripts/backup-db.sh`, `CLAUDE.md` |
+
+### Вторая волна («Позже»)
+
+| # | Этап | Статус | Файлы |
+|---|------|--------|-------|
+| 1Б | Pre-commit `detect-secrets` | ✅ | `.pre-commit-config.yaml`, `.secrets.baseline` |
+| 2Б | `docker-compose.yml` (dev) + `.prod.yml` | ✅ | `docker-compose.yml`, `docker-compose.prod.yml`, CI |
+| 3Б | Интеграционные тесты с pgvector в CI | ✅ | `tests/integration/`, CI job |
+| 5Б | Sentry (опционально по `SENTRY_DSN`) | ✅ | `requirements.txt`, `app/config.py`, `app/main.py` |
+| 6А | JSON-логи в проде | ✅ | `app/logging.py`, `app/main.py` |
+
+**Итого: 13/13 этапов выполнено**
