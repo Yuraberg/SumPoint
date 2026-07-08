@@ -1,12 +1,11 @@
 """Schedule (v2 cron) and DigestSchedule queries."""
 from datetime import datetime
 
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.schedule import Schedule
 from app.models.digest_schedule import DigestSchedule
-
+from app.models.schedule import Schedule
 
 # ── Schedule v2 (cron) ────────────────────────────────────────────────────────
 

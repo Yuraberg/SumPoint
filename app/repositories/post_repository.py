@@ -1,11 +1,11 @@
 """Post queries: listing, keyword search, semantic search, dedup, digest feed."""
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Row, select, text, or_
+from sqlalchemy import Row, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.post import Post
 from app.models.channel import Channel
+from app.models.post import Post
 
 
 def escape_like(value: str) -> str:
