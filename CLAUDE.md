@@ -27,8 +27,21 @@ python -m bot.bot
 
 ### Full Docker deployment
 ```bash
+# Development (hot-reload, published ports, DEBUG=true)
 docker compose up -d
-# App is exposed on port 8001 (mapped to container's 8000)
+
+# Production (immutable images, restart: always, no exposed ports)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Pre-commit hooks (setup once per clone)
+```bash
+pip install pre-commit
+pre-commit install
+# Now every `git commit` will scan for secrets via detect-secrets.
+# To manually scan: detect-secrets scan --all-files
+# To update baseline after intentionally adding a secret-like string:
+#   detect-secrets scan --update .secrets.baseline
 ```
 
 ### Database migrations
@@ -102,6 +115,70 @@ Digest schedule controlled by `DIGEST_MORNING_HOUR` and `DIGEST_EVENING_HOUR` (U
 `REDIS_URL` is also used directly as the Celery broker and result backend (`app/tasks/celery_app.py`) — there is no separate `CELERY_BROKER_URL`/`CELERY_RESULT_BACKEND`. All four services (`api`, `bot`, `worker`, `beat`) must point `REDIS_URL` at the same Redis instance (e.g. `redis://redis:6379/0` in Docker), otherwise Celery can't dispatch or pick up any task.
 
 Set `UPTIME_KUMA_PUSH_URL` to a Uptime Kuma push-monitor URL to get a heartbeat ping every 5 minutes from the worker (`uptime_kuma_heartbeat` task) — lets Uptime Kuma alert if the worker stops processing tasks.
+
+## Monitoring (Uptime Kuma)
+
+The following monitors should be configured in Uptime Kuma for full coverage:
+
+### 1. Worker heartbeat (Push monitor)
+- **Type:** Push
+- **URL:** set `UPTIME_KUMA_PUSH_URL` in `.env` to the push URL from Uptime Kuma
+- **Heartbeat interval:** 300s (5 min, matches the Celery beat schedule)
+- **Alert after:** 600s (2 missed heartbeats)
+
+### 2. API health check (HTTP monitor)
+- **Type:** HTTP(s)
+- **URL:** `https://<your-domain>/api/v1/health`
+- **Interval:** 60s
+- **Retries:** 3
+- **Expected:** HTTP 200, JSON with `"status": "healthy"`
+- This endpoint checks DB (`SELECT 1`) and Redis (`PING`) — alerts if either is down.
+
+### 3. SSL certificate expiry
+- **Type:** Certificate expiry (built into Uptime Kuma)
+- **URL:** `https://<your-domain>`
+- **Alert when:** < 14 days until expiry
+
+### Notification channels
+Configure at least one notification channel (Telegram bot is recommended):
+- Uptime Kuma → Settings → Notifications → Telegram
+- Set the bot token and chat ID
+
+### Error tracking (Sentry)
+
+SumPoint supports Sentry for automatic error tracking. It's **optional** — if
+`SENTRY_DSN` is empty, Sentry is a no-op with zero overhead.
+
+```bash
+# 1. Create a project at https://sentry.io (FastAPI template)
+# 2. Copy the DSN (Settings → Client Keys → DSN)
+# 3. Add to .env:
+SENTRY_DSN=https://abc123@sentry.io/12345
+```
+
+Once configured, all unhandled exceptions are automatically captured. The SDK
+also captures FastAPI request data, stack traces, and 10% of transactions for
+performance monitoring. PII is disabled by default.
+
+## Database backups
+
+Run `scripts/backup-db.sh` to create a gzipped pg_dump. The script auto-parses
+`DATABASE_URL` from `.env`.
+
+```bash
+cd /root/vps-new
+source .env
+./scripts/backup-db.sh          # single backup
+./scripts/backup-db.sh --cron   # backup + rotate (keeps 7 days)
+```
+
+To automate, add a cron job on the VPS host:
+
+```
+0 3 * * * cd /root/vps-new && source .env && ./scripts/backup-db.sh --cron
+```
+
+Backups are stored in `./backups/` by default (override with `BACKUP_DIR`).
 
 ## Database schema notes
 - `users.id` is the Telegram user ID (BigInteger), not a serial PK.

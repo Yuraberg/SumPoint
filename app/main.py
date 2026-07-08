@@ -1,14 +1,49 @@
 """FastAPI application entry point."""
+import logging
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-import os
 
 from app.api.router import api_router
 from app.config import get_settings
 from app.rate_limit import limiter
+
+_settings = get_settings()
+
+# ── Logging configuration ────────────────────────────────────────────
+# Development: human-readable text logs
+# Production: JSON logs (parseable by Loki, Datadog, etc.)
+if _settings.debug:
+    logging.basicConfig(
+        level=getattr(logging, _settings.log_level.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+else:
+    from app.logging import setup_json_logging
+    setup_json_logging(level=getattr(logging, _settings.log_level.upper(), logging.WARNING))
+# Keep third-party libraries quiet unless LOG_LEVEL is DEBUG
+if _settings.log_level.upper() not in ("DEBUG",):
+    for lib in ("httpx", "httpcore", "openai", "sqlalchemy.engine", "celery"):
+        logging.getLogger(lib).setLevel(logging.WARNING)
+
+# ── Sentry (optional error tracking) ──────────────────────────────────
+# Set SENTRY_DSN in .env to activate. Without it, Sentry is a no-op.
+# Get a DSN at https://sentry.io → Create Project → FastAPI.
+if _settings.sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_settings.sentry_dsn,
+        traces_sample_rate=0.1,  # capture 10% of transactions for perf
+        environment="production" if not _settings.debug else "development",
+        send_default_pii=False,
+    )
+    logging.getLogger("sentry_sdk").setLevel(logging.WARNING)
+
+# ── App ──────────────────────────────────────────────────────────────
 
 # Schema is owned exclusively by Alembic migrations (see CLAUDE.md —
 # `alembic upgrade head` runs before the app starts in both local dev and
@@ -18,8 +53,6 @@ app = FastAPI(
     description="Intelligent Telegram content processing — AI digest, classification & event extraction",
     version="1.0.0",
 )
-
-_settings = get_settings()
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,6 +64,18 @@ app.add_middleware(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Production safeguard: warn if CORS_ORIGINS still points to localhost
+if not _settings.debug:
+    localhost_origins = [o for o in _settings.cors_origins if "localhost" in o or "127.0.0.1" in o]
+    if localhost_origins:
+        import logging
+        _log = logging.getLogger("uvicorn")
+        _log.warning(
+            "CORS_ORIGINS contains localhost in production mode: %s. "
+            "Set CORS_ORIGINS to your frontend domain(s) before launch.",
+            localhost_origins,
+        )
 
 app.include_router(api_router, prefix="/api/v1")
 

@@ -1,0 +1,28 @@
+[tool.ruff]
+# Target Python version
+target-version = "py311"
+
+# Directories to exclude
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "alembic/versions",   # auto-generated migrations
+    "frontend",           # JS, not Python
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes (unused imports, undefined names)
+    "W",   # pycodestyle warnings
+    "I",   # isort (import ordering)
+    "B",   # flake8-bugbear (common bugs)
+    "SIM", # flake8-simplify (simplify code)
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # do not perform function calls in argument defaults (FastAPI Depends)
+    "B904",  # raise without from inside except
+]

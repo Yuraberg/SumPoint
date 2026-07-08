@@ -32,4 +32,10 @@ RUN mkdir -p /app/sessions && chmod 700 /app/sessions \
     && chown -R appuser:appuser /app
 USER appuser
 
+# Healthcheck: verifies the app responds on its port. Uses Python's urllib
+# because the slim image has no curl/wget. The /health endpoint is a simple
+# 200 OK — for deeper checks (DB, Redis) use /api/v1/health via Uptime Kuma.
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 --start-period=10s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
 EXPOSE 8000
