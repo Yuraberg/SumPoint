@@ -3,13 +3,13 @@ import logging
 
 import httpx
 
-from app.tasks.celery_app import celery_app
-from app.tasks.base import run
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models.channel import Channel
 from app.repositories import channel_repository, user_repository
 from app.services.telegram_ingestion import TelegramIngestion
+from app.tasks.base import run
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 

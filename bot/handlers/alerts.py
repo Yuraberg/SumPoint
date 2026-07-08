@@ -1,7 +1,7 @@
 """/alert command — manage keyword alerts, triggered when a new matching post arrives."""
+from sqlalchemy.exc import IntegrityError
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy.exc import IntegrityError
 
 from app.database import AsyncSessionLocal
 from app.models.keyword_alert import KeywordAlert

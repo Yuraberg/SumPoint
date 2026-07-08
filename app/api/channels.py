@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUser
 from app.database import get_db
 from app.models.channel import Channel
-from app.schemas.channel import ChannelCreate, ChannelOut
 from app.repositories import channel_repository
-from app.api.deps import CurrentUser
+from app.schemas.channel import ChannelCreate, ChannelOut
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 

@@ -1,8 +1,16 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, String, Boolean, DateTime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import BigInteger, Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.database import Base
 from app.utils.time import utcnow
+
+if TYPE_CHECKING:
+    from app.models.channel import Channel
+    from app.models.digest_schedule import DigestSchedule
+    from app.models.schedule import Schedule
 
 
 class User(Base):

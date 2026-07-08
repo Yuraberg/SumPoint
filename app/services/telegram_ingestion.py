@@ -16,7 +16,8 @@ from typing import AsyncIterator
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-from telethon.tl.types import Message, Channel as TLChannel
+from telethon.tl.types import Channel as TLChannel
+from telethon.tl.types import Message
 
 from app.config import get_settings
 from app.constants import AD_KEYWORDS, FETCH_HISTORY_HOURS, FETCH_MESSAGE_LIMIT

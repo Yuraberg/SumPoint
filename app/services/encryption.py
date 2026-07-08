@@ -1,7 +1,8 @@
 """AES-256-GCM encryption for Telegram session files."""
 import os
-import base64
+
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
 from app.config import get_settings
 
 _settings = get_settings()

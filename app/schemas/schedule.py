@@ -1,5 +1,6 @@
 """Pydantic schemas for the Schedule (v2 cron) API."""
 from datetime import datetime
+
 from pydantic import BaseModel
 
 from app.constants import DEFAULT_MODEL

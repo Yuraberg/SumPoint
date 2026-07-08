@@ -4,8 +4,10 @@ from telegram.ext import ContextTypes
 
 from app.database import AsyncSessionLocal
 from app.repositories import user_repository
-from bot.keyboards import WELCOME, main_menu_keyboard  # noqa: F401  (WELCOME re-exported)
-
+from bot.keyboards import (  # noqa: F401  (WELCOME re-exported)
+    WELCOME,
+    main_menu_keyboard,
+)
 
 HELP_TEXT = (
     "🛟 *Команды SumPoint*\n\n"

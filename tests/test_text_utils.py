@@ -1,5 +1,5 @@
-from app.utils.text import truncate
 from app.constants import DIGEST_TEXT_LIMIT
+from app.utils.text import truncate
 
 
 def test_truncate_short_text_unchanged():

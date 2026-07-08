@@ -1,17 +1,29 @@
-from sqlalchemy import BigInteger, CheckConstraint, Integer, String, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from app.database import Base
-from app.constants import (  # noqa: F401  (re-exported for backward compatibility)
-    SCHEDULE_TYPES,
-    SCHEDULE_STATUSES,
-    AVAILABLE_MODELS,
-    DEFAULT_MODEL,
-    CRON_PRESETS,
-    SCHEDULE_TYPE_LABELS as _TYPE_LABELS,
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
 )
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.constants import (  # noqa: F401  (re-exported for backward compatibility)
+    AVAILABLE_MODELS,
+    CRON_PRESETS,
+    DEFAULT_MODEL,
+    SCHEDULE_STATUSES,
+    SCHEDULE_TYPES,
+)
+from app.database import Base
 from app.utils.time import utcnow
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Schedule(Base):

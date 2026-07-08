@@ -1,15 +1,16 @@
 """Schedule management endpoints."""
 from datetime import datetime
+
 from croniter import croniter
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.constants import SCHEDULE_TYPES, AVAILABLE_MODELS
-from app.models.schedule import Schedule
-from app.schemas.schedule import ScheduleOut, ScheduleCreate, ScheduleUpdate
-from app.repositories import schedule_repository
 from app.api.deps import CurrentUser
+from app.constants import AVAILABLE_MODELS, SCHEDULE_TYPES
+from app.database import get_db
+from app.models.schedule import Schedule
+from app.repositories import schedule_repository
+from app.schemas.schedule import ScheduleCreate, ScheduleOut, ScheduleUpdate
 from app.utils.time import utcnow
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])

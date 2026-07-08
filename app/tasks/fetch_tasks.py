@@ -1,32 +1,36 @@
 """Celery tasks for polling channels and ingesting new posts."""
 import asyncio
+import contextlib
 import logging
+from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
 
-from app.tasks.celery_app import celery_app
-from app.tasks.base import run, get_bot
 from app.config import get_settings
 from app.constants import (
-    CHANNEL_FETCH_DELAY,
-    CHANNEL_BATCH_SIZE,
     CHANNEL_BATCH_DELAY,
+    CHANNEL_BATCH_SIZE,
+    CHANNEL_FETCH_DELAY,
     CONTENT_DEDUP_WINDOW_DAYS,
     FETCH_HISTORY_HOURS,
     FETCH_LOCK_KEY,
     FETCH_LOCK_TTL,
 )
 from app.database import AsyncSessionLocal
-from app.models.post import Post
 from app.models.channel import Channel
+from app.models.post import Post
 from app.models.user import User
-from app.repositories import channel_repository, post_repository, user_repository
-from app.repositories import alert_repository
-from app.services.telegram_ingestion import TelegramIngestion
+from app.repositories import (
+    alert_repository,
+    channel_repository,
+    post_repository,
+    user_repository,
+)
 from app.services.ai_engine import process_post
+from app.services.telegram_ingestion import TelegramIngestion
+from app.tasks.base import get_bot, run
+from app.tasks.celery_app import celery_app
 from app.utils.time import utcnow
-
-from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -232,14 +236,10 @@ async def _notify_channel_failure(user: User, channel: Channel, error: Exception
 
 
 async def _safe_rollback(db) -> None:
-    try:
+    with contextlib.suppress(Exception):
         await db.rollback()
-    except Exception:
-        pass
 
 
 async def _safe_commit(db) -> None:
-    try:
+    with contextlib.suppress(Exception):
         await db.commit()
-    except Exception:
-        pass

@@ -3,12 +3,12 @@ import logging
 
 from croniter import croniter
 
-from app.tasks.celery_app import celery_app
-from app.tasks.base import run, get_bot
 from app.database import AsyncSessionLocal
 from app.repositories import schedule_repository
 from app.services.calendar_service import get_upcoming_events
-from app.services.digest_delivery import send_digest_for_user, format_events_message
+from app.services.digest_delivery import format_events_message, send_digest_for_user
+from app.tasks.base import get_bot, run
+from app.tasks.celery_app import celery_app
 from app.utils.text import truncate
 from app.utils.time import utcnow
 

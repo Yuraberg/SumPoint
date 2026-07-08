@@ -1,6 +1,15 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Integer, String, DateTime, ForeignKey, UniqueConstraint
+
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database import Base
 from app.utils.time import utcnow
 

@@ -1,12 +1,13 @@
 """Digest and calendar endpoints."""
 from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
 from app.api.deps import CurrentUser
-from app.services.digest_service import build_user_digest
+from app.database import get_db
 from app.services.calendar_service import get_upcoming_events
+from app.services.digest_service import build_user_digest
 
 router = APIRouter(prefix="/digest", tags=["digest"])
 

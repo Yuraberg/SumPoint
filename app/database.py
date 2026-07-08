@@ -1,6 +1,9 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+import contextlib
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
+
 from app.config import get_settings
 
 settings = get_settings()
@@ -25,10 +28,8 @@ def _dispose_engine():
     """
     global _engine
     if _engine is not None:
-        try:
+        with contextlib.suppress(Exception):
             _engine.sync_engine.dispose()
-        except Exception:
-            pass
     _engine = None
 
 

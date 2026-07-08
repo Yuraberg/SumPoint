@@ -5,8 +5,8 @@ re-export them from app.constants. If someone reintroduces a literal, these
 identity checks fail.
 """
 from app import constants
-from app.models import schedule as schedule_model
 from app.models import digest_schedule as digest_model
+from app.models import schedule as schedule_model
 
 
 def test_available_models_shared():

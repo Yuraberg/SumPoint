@@ -15,8 +15,8 @@
 в переменную TELEGRAM_SESSION_STRING в Coolify.
 """
 
-from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
+from telethon.sync import TelegramClient
 
 API_ID = int(input("Введи API_ID: "))
 API_HASH = input("Введи API_HASH: ")

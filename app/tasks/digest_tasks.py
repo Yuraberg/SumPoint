@@ -7,20 +7,20 @@ maintenance_tasks). Their public task objects are re-exported below so existing
 """
 import logging
 
-from app.tasks.celery_app import celery_app
-from app.tasks.base import run, get_bot
 from app.database import AsyncSessionLocal
 from app.repositories import schedule_repository, user_repository
 from app.services.digest_delivery import send_digest_for_user
+from app.tasks.base import get_bot, run
+from app.tasks.celery_app import celery_app
 
 # Backward-compatible re-exports (task objects registered in their own modules).
 from app.tasks.fetch_tasks import fetch_all_channels  # noqa: F401
-from app.tasks.schedule_tasks import check_and_run_schedules  # noqa: F401
 from app.tasks.maintenance_tasks import (  # noqa: F401
     import_channels_for_user,
     resolve_channel_username,
     uptime_kuma_heartbeat,
 )
+from app.tasks.schedule_tasks import check_and_run_schedules  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

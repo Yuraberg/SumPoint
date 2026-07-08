@@ -77,7 +77,7 @@ async def test_valid_cron_advances_and_executes(monkeypatch):
 @pytest.mark.asyncio
 async def test_execution_failure_does_not_crash_loop(monkeypatch):
     good = _sched("0 9 * * *")
-    session = _wire(monkeypatch, [good], [])
+    _wire(monkeypatch, [good], [])
 
     async def boom(db, sched):
         raise RuntimeError("delivery failed")

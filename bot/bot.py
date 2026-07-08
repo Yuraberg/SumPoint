@@ -1,20 +1,30 @@
 """Telegram bot entry point."""
 import logging
+
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from app.config import get_settings
-from bot.keyboards import WELCOME, main_menu_keyboard
-from bot.handlers.start import start, help_command
-from bot.handlers.search import search_posts, search_next_page
-from bot.handlers.recent import recent_posts
-from bot.handlers.channels import list_channels, add_channel, remove_channel, import_channels
 from bot.handlers.alerts import manage_alerts
-from bot.handlers.digest import digest_now, filter_by_category, show_events
-from bot.handlers.settings import (
-    settings_menu, toggle_morning, toggle_evening,
-    schedule_detail, set_hours, set_model,
+from bot.handlers.channels import (
+    add_channel,
+    import_channels,
+    list_channels,
+    remove_channel,
 )
+from bot.handlers.digest import digest_now, filter_by_category, show_events
+from bot.handlers.recent import recent_posts
+from bot.handlers.search import search_next_page, search_posts
+from bot.handlers.settings import (
+    schedule_detail,
+    set_hours,
+    set_model,
+    settings_menu,
+    toggle_evening,
+    toggle_morning,
+)
+from bot.handlers.start import help_command, start
+from bot.keyboards import WELCOME, main_menu_keyboard
 
 logging.basicConfig(level=logging.INFO)
 # httpx logs full request URLs at INFO — suppressed to avoid leaking the bot

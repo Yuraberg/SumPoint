@@ -1,7 +1,8 @@
 # ── Web framework ──────────────────────────────────────────────────────────────
-fastapi==0.115.5
+fastapi==0.139.0
+starlette==1.3.1
 uvicorn[standard]==0.32.1
-python-multipart==0.0.12
+python-multipart==0.0.32
 
 # ── Database ───────────────────────────────────────────────────────────────────
 sqlalchemy[asyncio]==2.0.36
@@ -21,15 +22,17 @@ celery==5.4.0
 redis==5.2.0
 
 # ── Security ───────────────────────────────────────────────────────────────────
-cryptography==43.0.3
-python-jose[cryptography]==3.3.0
-passlib==1.7.4
+cryptography==48.0.1
+# PyJWT (not python-jose): we only ever sign/verify HS256, and python-jose[cryptography]
+# pulls in ecdsa/pyasn1 (for algorithms we never use) with a known-unfixed CVE upstream
+# (PYSEC-2026-1325) that has no patched ecdsa release. PyJWT has no such dependency.
+PyJWT==2.13.0
 slowapi==0.1.9
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 pydantic==2.10.3
 pydantic-settings==2.6.1
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 
 # ── Utils ──────────────────────────────────────────────────────────────────────
 httpx==0.27.2
@@ -38,8 +41,8 @@ tenacity==9.0.0
 croniter==3.0.3
 
 # ── Testing ────────────────────────────────────────────────────────────────────
-pytest==8.3.4
-pytest-asyncio==0.25.0
+pytest==9.0.3
+pytest-asyncio==1.4.0
 
 # ── Error tracking ─────────────────────────────────────────────────────────────
 sentry-sdk[fastapi]==2.*

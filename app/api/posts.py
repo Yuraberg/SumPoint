@@ -1,14 +1,17 @@
 """Post retrieval and semantic search endpoints."""
 from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUser
 from app.database import get_db
 from app.models.post import Post
-from app.schemas.post import PostOut
-from app.api.deps import CurrentUser
 from app.repositories import post_repository
-from app.repositories.post_repository import escape_like as _escape_like  # noqa: F401  (re-exported)
+from app.repositories.post_repository import (
+    escape_like as _escape_like,  # noqa: F401  (re-exported)
+)
+from app.schemas.post import PostOut
 from app.services.ai_engine import generate_embedding
 
 router = APIRouter(prefix="/posts", tags=["posts"])

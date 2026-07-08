@@ -6,8 +6,8 @@ behaviour is worth pinning down without a live database.
 """
 import pytest
 
-from app.repositories import user_repository
 from app.models.user import User
+from app.repositories import user_repository
 
 
 class _FakeResult:
@@ -63,20 +63,22 @@ async def test_returns_existing_and_refreshes_fields():
     existing = User(id=42, first_name="Bob", username=None, chat_id=None)
     db = _FakeSession(existing_user=existing)
     user = await user_repository.get_or_create(
-        db, 42, first_name="ignored", username="bob", chat_id=123
+        db, 42, first_name="Bob Updated", username="bob", chat_id=123
     )
     assert user is existing
-    assert user.username == "bob"     # refreshed
-    assert user.chat_id == 123        # refreshed
-    assert db.added == []             # not re-added
-    assert db.flushed == 0            # no flush for existing rows
+    assert user.first_name == "Bob Updated"  # refreshed — Telegram display names change
+    assert user.username == "bob"            # refreshed
+    assert user.chat_id == 123               # refreshed
+    assert db.added == []                    # not re-added
+    assert db.flushed == 0                   # no flush for existing rows
 
 
 @pytest.mark.asyncio
 async def test_existing_user_missing_optional_fields_left_alone():
     existing = User(id=7, first_name="Carol", username="carol", chat_id=5)
     db = _FakeSession(existing_user=existing)
-    user = await user_repository.get_or_create(db, 7, first_name="x")
-    # No username/chat_id supplied → keep the current values.
+    user = await user_repository.get_or_create(db, 7, first_name="")
+    # Nothing truthy supplied → keep the current values.
+    assert user.first_name == "Carol"
     assert user.username == "carol"
     assert user.chat_id == 5

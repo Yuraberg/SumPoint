@@ -20,8 +20,8 @@ from app.config import get_settings
 from app.constants import EMBEDDING_DIM
 from app.prompts import (
     build_classification_prompt,
-    build_summarization_prompt,
     build_event_extraction_prompt,
+    build_summarization_prompt,
 )
 from app.prompts.classification import CATEGORIES
 
@@ -97,7 +97,7 @@ async def classify_post(text: str) -> str:
     prompt = build_classification_prompt(text)
     raw = await _call(prompt)
     clean = _strip_thought(raw)
-    last_line = [l.strip() for l in clean.splitlines() if l.strip()][-1] if clean else ""
+    last_line = [line.strip() for line in clean.splitlines() if line.strip()][-1] if clean else ""
     for cat in CATEGORIES:
         if cat.lower() in last_line.lower():
             return cat

@@ -1,13 +1,13 @@
 """Settings / schedule preferences handlers."""
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.constants import (
     AVAILABLE_MODELS,
-    VALID_DIGEST_HOURS,
     DIGEST_HOURS_LABELS,
     DIGEST_SLOT_LABELS,
     MODEL_LABELS,
+    VALID_DIGEST_HOURS,
 )
 from app.database import AsyncSessionLocal
 from app.models.digest_schedule import DigestSchedule

@@ -1,7 +1,8 @@
 """ /search command — ILIKE + pgvector semantic search over posts. """
 
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.database import AsyncSessionLocal

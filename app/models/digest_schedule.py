@@ -1,14 +1,26 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, Integer, String, Boolean, CheckConstraint, DateTime, JSON, UniqueConstraint, ForeignKey
+from typing import TYPE_CHECKING
+
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.constants import AVAILABLE_MODELS, DEFAULT_MODEL  # noqa: F401  (re-exported)
+from app.constants import VALID_DIGEST_HOURS as VALID_HOURS  # noqa: F401  (re-exported)
 from app.database import Base
-from app.constants import (  # noqa: F401  (re-exported for backward compatibility)
-    AVAILABLE_MODELS,
-    DEFAULT_MODEL,
-    VALID_DIGEST_HOURS as VALID_HOURS,
-)
 from app.utils.time import utcnow
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class DigestSchedule(Base):

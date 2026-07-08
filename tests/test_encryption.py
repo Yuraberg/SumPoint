@@ -1,4 +1,6 @@
 import pytest
+from cryptography.exceptions import InvalidTag
+
 from app.services import encryption
 
 
@@ -12,7 +14,7 @@ def test_encrypt_decrypt_roundtrip():
 def test_decrypt_rejects_tampered_ciphertext():
     ciphertext = bytearray(encryption.encrypt_file(b"some session data"))
     ciphertext[-1] ^= 0xFF  # flip last byte of the GCM tag
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         encryption.decrypt_file(bytes(ciphertext))
 
 

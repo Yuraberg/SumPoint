@@ -1,10 +1,26 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, String, Boolean, DateTime, ForeignKey, Text, JSON, Integer, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import TYPE_CHECKING
+
 from pgvector.sqlalchemy import Vector
-from app.database import Base
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.constants import EMBEDDING_DIM  # noqa: F401  (re-exported)
+from app.database import Base
 from app.utils.time import utcnow
+
+if TYPE_CHECKING:
+    from app.models.channel import Channel
 
 
 class Post(Base):

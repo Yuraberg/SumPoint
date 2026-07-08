@@ -1,8 +1,26 @@
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
+
 from app.config import get_settings
 
 settings = get_settings()
+
+# httpx (used directly and via python-telegram-bot's HTTPXRequest) logs each
+# request at INFO with the full URL — and the Telegram Bot API embeds the bot
+# token in the URL path (/bot<TOKEN>/method) — so leaving it at INFO leaks the
+# token into worker/beat stdout on every digest/alert/notification send. The API
+# process gets the same suppression in app/main.py; this module is the
+# equivalent entrypoint for the worker and beat processes (neither imports
+# app.main). Explicit per-logger levels aren't reset by Celery's own
+# --loglevel=info setup, so this is safe regardless of import order.
+# ("celery" itself is deliberately NOT included — --loglevel=info's
+# task-received/task-succeeded logs are exactly what makes the worker
+# observable, unlike in the api process where that logger is inert noise.)
+if settings.log_level.upper() != "DEBUG":
+    for _lib in ("httpx", "httpcore", "openai", "sqlalchemy.engine"):
+        logging.getLogger(_lib).setLevel(logging.WARNING)
 
 celery_app = Celery(
     "sumpoint",

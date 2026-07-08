@@ -12,26 +12,29 @@ from datetime import timedelta
 from typing import Annotated
 from urllib.parse import parse_qs
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.constants import (
-    JWT_ALGORITHM as ALGORITHM,
-    TOKEN_EXPIRE_SECONDS,
     AUTH_FRESHNESS_SECONDS,
     MAGIC_LINK_TTL_MINUTES,
+    TOKEN_EXPIRE_SECONDS,
+)
+from app.constants import (
+    JWT_ALGORITHM as ALGORITHM,
 )
 from app.database import get_db
-from app.rate_limit import limiter
-from app.models.user import User
 from app.models.magic_link import MagicLink
+from app.models.user import User
+from app.rate_limit import limiter
 from app.repositories import user_repository
 from app.utils.time import utcnow
-from sqlalchemy import select
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -204,8 +207,9 @@ class MagicLinkRequest(BaseModel):
 
 async def _send_telegram_message(chat_id: int, text: str) -> bool:
     """Send a message via Telegram Bot API. Returns True on success."""
-    import httpx
     import logging
+
+    import httpx
     logger = logging.getLogger("sumpoint.auth")
     url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
     try:

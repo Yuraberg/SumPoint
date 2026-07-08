@@ -28,8 +28,9 @@ async def get_or_create(
 
     Consolidates the near-identical user-creation blocks that lived in the three
     auth endpoints and the bot ``/start`` handler. Existing rows are refreshed
-    with any newly supplied ``username`` / ``chat_id`` so a login always keeps
-    the DM channel and handle current. The caller owns the commit.
+    with any newly supplied ``first_name`` / ``username`` / ``chat_id`` so a
+    login always keeps the display name, DM channel, and handle current with
+    Telegram. The caller owns the commit.
     """
     user = await get_by_id(db, user_id)
     if user is None:
@@ -45,6 +46,8 @@ async def get_or_create(
         return user
 
     # Refresh mutable identity fields on returning users.
+    if first_name:
+        user.first_name = first_name
     if username:
         user.username = username
     if chat_id is not None:

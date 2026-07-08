@@ -1,14 +1,14 @@
 """Digest-related bot handlers."""
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.constants import DEFAULT_DIGEST_HOURS
 from app.database import AsyncSessionLocal
 from app.prompts.classification import CATEGORIES
 from app.repositories import post_repository, schedule_repository
-from app.services.digest_service import build_user_digest
 from app.services.calendar_service import get_upcoming_events
 from app.services.digest_delivery import format_events_message
+from app.services.digest_service import build_user_digest
 from app.utils.text import truncate
 
 

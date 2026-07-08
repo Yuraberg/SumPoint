@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from app.api import auth, channels, posts, digest, schedule, health
+
+from app.api import auth, channels, digest, health, posts, schedule
 
 api_router = APIRouter()
 api_router.include_router(auth.router)

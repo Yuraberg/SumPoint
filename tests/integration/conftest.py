@@ -5,13 +5,13 @@ In CI, this is provided by the pgvector service container.
 Locally, point DATABASE_URL to your dev database.
 """
 import os
+
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
 from app.models.user import User  # noqa: F401 — ensure models are loaded
-
 
 # Override test defaults with a database that actually exists
 TEST_DB_URL = os.environ.get(
@@ -20,9 +20,15 @@ TEST_DB_URL = os.environ.get(
 )
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def engine():
-    """Create a test database engine (session-scoped)."""
+    """Create a test database engine.
+
+    Function-scoped (not session-scoped): pytest-asyncio's event_loop fixture
+    is function-scoped (see pytest.ini's asyncio_default_fixture_loop_scope),
+    and an async fixture can't outlive the event loop it was created on — a
+    session-scoped engine here raised ScopeMismatch on every integration test.
+    """
     eng = create_async_engine(TEST_DB_URL, echo=False)
 
     # Create pgvector extension if needed
@@ -33,9 +39,9 @@ async def engine():
     await eng.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def _create_tables(engine):
-    """Create all tables once per test session."""
+    """Create all tables for this test, drop them afterward."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -47,7 +53,6 @@ async def _create_tables(engine):
 async def db(engine, _create_tables):
     """Provide a fresh transaction-rolled-back session per test."""
     sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
-    async with sessionmaker() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    async with sessionmaker() as session, session.begin():
+        yield session
+        await session.rollback()

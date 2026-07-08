@@ -3,7 +3,12 @@ import hmac
 import json
 import time
 
-from app.api.auth import TelegramAuthData, _verify_telegram_hash, _verify_webapp_init_data, settings
+from app.api.auth import (
+    TelegramAuthData,
+    _verify_telegram_hash,
+    _verify_webapp_init_data,
+    settings,
+)
 
 
 def _signed_login_widget_data(**overrides) -> TelegramAuthData:

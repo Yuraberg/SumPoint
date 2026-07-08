@@ -9,11 +9,8 @@ Usage:
     TEST_DATABASE_URL=postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint_test \\
     pytest tests/integration/ -v
 """
-import os
 import pytest
-import pytest_asyncio
 from sqlalchemy import text
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,7 +35,6 @@ async def test_pgvector_extension(db):
 @pytest.mark.integration
 async def test_create_and_query_user(db):
     """Verify we can insert and query a user in a real DB."""
-    from app.models.user import User
     from app.repositories import user_repository
 
     user = await user_repository.get_or_create(
@@ -64,7 +60,7 @@ async def test_user_idempotency(db):
     """Verify get_or_create is idempotent with real DB."""
     from app.repositories import user_repository
 
-    user1 = await user_repository.get_or_create(
+    await user_repository.get_or_create(
         db, user_id=42, first_name="Alice", username="alice", chat_id=1
     )
     user2 = await user_repository.get_or_create(
