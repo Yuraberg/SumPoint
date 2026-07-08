@@ -1,12 +1,23 @@
-version: "3.9"
+# ─────────────────────────────────────────────────────────────────────────────
+# SumPoint — Docker Compose (development)
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose up -d                # start all services
+#   docker compose up -d db redis       # infrastructure only (run app locally)
+#   docker compose logs -f api          # tail API logs
+#
+# For production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
 
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sumpoint}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sumpoint}
       POSTGRES_DB: ${POSTGRES_DB:-sumpoint}
+    ports:
+      - "5432:5432"  # exposed for local dev tools (psql, DBeaver, etc.)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,6 +28,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"  # exposed for local dev tools
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -26,66 +39,20 @@ services:
   api:
     build: .
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips='*'"
     ports:
       - "8001:8000"
     networks:
       - coolify
-    environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
-      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
-      - SECRET_KEY=${SECRET_KEY}
-      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:8001"]}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
-      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
+    env_file:
+      - .env
     volumes:
-      - sessions:/app/sessions
+      - .:/app
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  bot:
-    build: .
-    command: python -m bot.bot
-    environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
-      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
-      - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
-      - SECRET_KEY=${SECRET_KEY}
-      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
-      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
-    volumes:
-      - sessions:/app/sessions
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python -m bot.bot' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   worker:
     build: .
@@ -93,59 +60,29 @@ services:
     # threads pool; solo runs one task at a time in the main thread, which is
     # what _run()'s asyncio.run() bridge (app/tasks/base.py) expects.
     command: celery -A app.tasks.celery_app worker --loglevel=info --pool=solo
-    environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
-      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
-      - TELEGRAM_SESSION_STRING=${TELEGRAM_SESSION_STRING}
-      - SECRET_KEY=${SECRET_KEY}
-      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
-      - POSTS_FETCH_BATCH_SIZE=${POSTS_FETCH_BATCH_SIZE:-20}
-      - UPTIME_KUMA_PUSH_URL=${UPTIME_KUMA_PUSH_URL}
+    env_file:
+      - .env
     volumes:
+      - .:/app
       - sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 3
 
   beat:
     build: .
     command: celery -A app.tasks.celery_app beat --loglevel=info
-    environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DIGEST_MORNING_HOUR=${DIGEST_MORNING_HOUR:-8}
-      - DIGEST_EVENING_HOUR=${DIGEST_EVENING_HOUR:-20}
-      - POSTS_FETCH_INTERVAL_MINUTES=${POSTS_FETCH_INTERVAL_MINUTES:-20}
-      - SECRET_KEY=${SECRET_KEY}
-      - SESSION_ENCRYPTION_KEY=${SESSION_ENCRYPTION_KEY}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-sumpoint}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sumpoint}}
+    env_file:
+      - .env
+    volumes:
+      - .:/app
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-networks:
-  coolify:
-    external: true
 
 volumes:
   pgdata:

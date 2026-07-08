@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SumPoint — Docker Compose overrides (production)
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Key differences from dev:
+#   - No source code mounts (immutable images)
+#   - External Coolify network (Caddy reverse proxy)
+#   - No published ports (Caddy handles ingress)
+#   - restart: always for resilience
+#   - Resource limits
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    restart: always
+    ports: []  # never expose DB to the internet
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  redis:
+    restart: always
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  api:
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DEBUG=false
+      - LOG_LEVEL=WARNING
+    volumes:
+      - sessions:/app/sessions  # keep, remove source mount
+    networks:
+      - coolify
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  bot:
+    restart: always
+    env_file:
+      - .env
+    volumes: []  # no source mount
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m bot.bot' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - coolify
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  worker:
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - sessions:/app/sessions  # keep, remove source mount
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+    networks:
+      - coolify
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  beat:
+    restart: always
+    env_file:
+      - .env
+    volumes: []
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - coolify
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  coolify:
+    external: true
+
+volumes:
+  pgdata:
+  sessions:

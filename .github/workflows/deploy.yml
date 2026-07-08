@@ -25,14 +25,59 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Lint (ruff)
+        run: pip install ruff && ruff check .
+
+      - name: Security audit (pip-audit)
+        run: pip install pip-audit && pip-audit
+
       - name: Run tests
         run: pytest -v
 
       - name: Byte-compile sources
         run: python -m py_compile $(find app bot -name "*.py")
 
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: sumpoint
+          POSTGRES_PASSWORD: sumpoint
+          POSTGRES_DB: sumpoint_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://sumpoint:sumpoint@localhost:5432/sumpoint_test
+      SECRET_KEY: ci-test-secret-key
+      SESSION_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      TELEGRAM_BOT_TOKEN: "123456:ci-test-token"
+      DEEPSEEK_API_KEY: ci-test-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run integration tests
+        run: pytest tests/integration/ -v
+
   deploy:
-    needs: test
+    needs: [test, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -47,7 +92,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cd /root/vps-new
-            docker compose --env-file .env up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
+            docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -67,4 +112,4 @@ jobs:
             docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || (echo "Worker not running" && exit 1)
             docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || (echo "Beat not running" && exit 1)
             echo "All services healthy"
-            docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml logs --tail=20 sumpoint-api
+            docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml -f /root/vps-new/docker-compose.prod.yml logs --tail=20 sumpoint-api

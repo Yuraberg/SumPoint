@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # Debug
     debug: bool = False
 
+    # Logging
+    log_level: str = "INFO"
+
+    # Sentry error tracking (optional — only activates if DSN is set)
+    sentry_dsn: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
