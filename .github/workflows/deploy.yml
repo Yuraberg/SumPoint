@@ -92,7 +92,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             cd /root/vps-new
-            docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
+            docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --build api bot worker beat
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -112,4 +112,4 @@ jobs:
             docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || (echo "Worker not running" && exit 1)
             docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || (echo "Beat not running" && exit 1)
             echo "All services healthy"
-            docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml -f /root/vps-new/docker-compose.prod.yml logs --tail=20 sumpoint-api
+            docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml -f /root/vps-new/docker-compose.prod.yml logs --tail=20 api

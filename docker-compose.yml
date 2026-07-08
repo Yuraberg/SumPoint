@@ -38,16 +38,31 @@ services:
 
   api:
     build: .
+    container_name: sumpoint-api
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --proxy-headers --forwarded-allow-ips='*'"
     ports:
       - "8001:8000"
-    networks:
-      - coolify
     env_file:
       - .env
     volumes:
       - .:/app
+      - sessions:/app/sessions
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  bot:
+    build: .
+    container_name: sumpoint-bot
+    command: python -m bot.bot
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - sessions:/app/sessions
     depends_on:
       db:
         condition: service_healthy
@@ -56,6 +71,7 @@ services:
 
   worker:
     build: .
+    container_name: sumpoint-worker
     # solo pool — async SQLAlchemy/asyncpg is not thread-safe across Celery's
     # threads pool; solo runs one task at a time in the main thread, which is
     # what _run()'s asyncio.run() bridge (app/tasks/base.py) expects.
@@ -73,6 +89,7 @@ services:
 
   beat:
     build: .
+    container_name: sumpoint-beat
     command: celery -A app.tasks.celery_app beat --loglevel=info
     env_file:
       - .env
