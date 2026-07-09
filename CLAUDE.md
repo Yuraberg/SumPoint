@@ -76,6 +76,7 @@ python generate_session.py
 - `GET /digest/events` — upcoming calendar events extracted from stored posts
 - `GET /stats/overview?days=N` — analytics dashboard: totals, posts-per-day (zero-filled), per-category and top-channel breakdowns
 - `GET /stats/channel-health` — per-channel post/unread counts, fetch freshness and last_error for the Channels health panel
+- `POST /chat/ask` — RAG assistant: retrieves the user's most relevant posts (BGE-M3 semantic search, keyword fallback if Ollama is down) and asks DeepSeek to answer with `[N]` citations; returns `{answer, sources}`. Rate-limited (15/min) since it hits both the embedding model and DeepSeek.
 
 ### Post processing pipeline
 New posts flow through the Celery worker only (never the API container):
@@ -104,7 +105,7 @@ Two modes, tried in order:
 `bot/bot.py` uses PTB (not Telethon). Handlers split into `bot/handlers/`: `start.py`, `digest.py`, `settings.py`. Handles `/start`, and callback queries: `digest_now`, `events`, `settings`, `toggle_morning`, `toggle_evening`, `filter_<category>`.
 
 ### Frontend
-Vanilla JS SPA (`frontend/`). Layout: dark sidebar with page navigation + light main content. Pages: **Посты** (posts table with date/channel/category filters + expandable rows), **Сводки** (digest), **События** (events), **Каналы** (channel management). Auth via Telegram Login Widget → JWT stored as `sp_token` in localStorage.
+Vanilla JS SPA (`frontend/`). Layout: dark sidebar with page navigation + light main content. Pages: **Посты** (posts table with date/channel/category filters + expandable rows), **Сводки** (digest), **События** (events), **Статистика** (analytics dashboard), **Ассистент** (RAG chat over your posts), **Каналы** (channel management + health panel). Auth via Telegram Login Widget → JWT stored as `sp_token` in localStorage.
 
 ### Prompts
 All prompts live in `app/prompts/` (`classification.py`, `summarization.py`, `event_extraction.py`). When editing prompts, keep the parsing logic in `ai_engine.py` in sync with the expected output format.

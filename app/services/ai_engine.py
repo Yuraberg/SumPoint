@@ -90,6 +90,29 @@ async def _call(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = N
     return response.choices[0].message.content.strip()
 
 
+async def answer_from_context(question: str, context: str, model: str | None = None) -> str:
+    """RAG answer: reply to ``question`` grounded strictly in ``context`` (the
+    retrieved posts, each prefixed with a [N] marker). Used by the assistant
+    chat — kept here so all DeepSeek calls share one client/timeout config."""
+    system = (
+        "Ты — ассистент по личной ленте Telegram-каналов пользователя. "
+        "Отвечай на вопрос ТОЛЬКО на основе приведённых ниже постов. "
+        "Ссылайся на источники в квадратных скобках в формате [N], где N — номер поста. "
+        "Если информации в постах недостаточно для ответа, честно скажи об этом и не выдумывай. "
+        "Отвечай на русском языке, кратко и по существу."
+    )
+    user = f"Вопрос: {question}\n\n### Посты\n{context}"
+    response = await _get_client().chat.completions.create(
+        model=model or MODEL,
+        max_tokens=1024,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return _strip_thought(response.choices[0].message.content.strip())
+
+
 async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
     """Public entry point for digest assembly — keeps callers out of ``_call``."""
     from app.prompts.summarization import build_digest_prompt

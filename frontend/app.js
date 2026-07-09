@@ -370,6 +370,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const statsDays = document.getElementById("stats-days");
   if (statsDays) statsDays.addEventListener("change", loadStats);
 
+  const chatSend = document.getElementById("chat-send-btn");
+  if (chatSend) chatSend.addEventListener("click", sendChatQuestion);
+  const chatInput = document.getElementById("chat-input");
+  if (chatInput) chatInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") sendChatQuestion();
+  });
+
   // Keyboard navigation
   document.addEventListener("keydown", handleFeedKey);
 
@@ -445,6 +452,7 @@ function navigate(page) {
   if (page === "posts") loadFeed();
   else if (page === "events") loadEvents();
   else if (page === "stats") loadStats();
+  else if (page === "chat") { const i = document.getElementById("chat-input"); if (i) i.focus(); }
   else if (page === "channels") loadChannels();
   else if (page === "schedule") loadSchedule();
 }
@@ -875,6 +883,87 @@ function renderBarList(elId, rows, nameFn) {
       <span class="bar-count">${r.count}</span>
     </div>`;
   }).join("");
+}
+
+// ── Assistant (RAG chat) ───────────────────────────────────────────────────────
+
+let chatBusy = false;
+
+function appendChatMessage(role, innerHtml) {
+  const box = document.getElementById("chat-messages");
+  const empty = document.getElementById("chat-empty");
+  if (empty) empty.remove();
+  const msg = document.createElement("div");
+  msg.className = "chat-msg chat-msg-" + role;
+  msg.innerHTML = innerHtml;
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+  return msg;
+}
+
+// Turn [N] citations in the answer into clickable chips scrolling to the source.
+function linkifyCitations(text) {
+  return escHtml(text).replace(/\[(\d+)\]/g,
+    (m, n) => `<a class="cite" href="#" data-cite="${n}">[${n}]</a>`);
+}
+
+function renderChatSources(sources) {
+  if (!sources || !sources.length) return "";
+  const items = sources.map((s, i) => {
+    const n = i + 1;
+    const name = escHtml(s.channel_title || s.channel_username || "—");
+    const date = s.published_at
+      ? new Date(s.published_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })
+      : "";
+    const link = s.channel_username
+      ? sanitizeUrl(`https://t.me/${s.channel_username}/${s.telegram_message_id}`)
+      : null;
+    const nameHtml = link
+      ? `<a href="${escHtml(link)}" target="_blank" rel="noopener">${name}</a>`
+      : name;
+    const snippet = s.snippet ? escHtml(s.snippet.slice(0, 220)) : "";
+    return `<div class="chat-src" data-src="${n}">
+      <span class="chat-src-n">[${n}]</span>
+      <div class="chat-src-body">
+        <div class="chat-src-head">${nameHtml} <span class="chat-src-date">${date}</span></div>
+        <div class="chat-src-snip">${snippet}</div>
+      </div>
+    </div>`;
+  }).join("");
+  return `<div class="chat-sources"><div class="chat-sources-label">Источники</div>${items}</div>`;
+}
+
+async function sendChatQuestion() {
+  const input = document.getElementById("chat-input");
+  const q = input.value.trim();
+  if (!q || chatBusy) return;
+  chatBusy = true;
+  input.value = "";
+  appendChatMessage("user", escHtml(q));
+  const thinking = appendChatMessage("bot", "<span class='chat-thinking'>Думаю…</span>");
+  try {
+    const res = await apiFetch("/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ question: q }),
+    });
+    thinking.remove();
+    const answer = (res && res.answer) ? res.answer : "Не удалось получить ответ.";
+    const bot = appendChatMessage("bot",
+      `<div class="chat-answer">${linkifyCitations(answer)}</div>${renderChatSources(res && res.sources)}`);
+    bot.querySelectorAll(".cite").forEach(a => {
+      a.addEventListener("click", e => {
+        e.preventDefault();
+        const el = bot.querySelector(`.chat-src[data-src="${a.dataset.cite}"]`);
+        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("cite-flash"); setTimeout(() => el.classList.remove("cite-flash"), 1200); }
+      });
+    });
+  } catch (e) {
+    thinking.remove();
+    appendChatMessage("bot", "<span class='chat-error'>Ошибка: " + escHtml(e.message) + "</span>");
+  } finally {
+    chatBusy = false;
+    input.focus();
+  }
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────

@@ -69,6 +69,9 @@
         <a href="#" class="nav-item" data-page="stats">
           <span class="nav-icon">&#9202;</span> Статистика
         </a>
+        <a href="#" class="nav-item" data-page="chat">
+          <span class="nav-icon">&#9993;</span> Ассистент
+        </a>
 
         <div class="nav-section-label" style="margin-top:16px">Управление</div>
         <a href="#" class="nav-item" data-page="schedule">
@@ -255,6 +258,27 @@
           </table>
           <div id="events-loader" class="table-message" style="display:none">Загрузка…</div>
           <div id="no-events" class="table-message" style="display:none">Событий не найдено.</div>
+        </div>
+      </div>
+
+      <!-- АССИСТЕНТ (RAG-чат) -->
+      <div class="page" id="page-chat">
+        <div class="page-header">
+          <h1 class="page-title">АССИСТЕНТ</h1>
+          <p class="page-subtitle">Задайте вопрос — ответ по вашим постам со ссылками на источники</p>
+        </div>
+        <div class="chat-page">
+          <div id="chat-messages" class="chat-messages">
+            <div class="chat-empty" id="chat-empty">
+              Спросите что-нибудь о ваших каналах — например,
+              «какие вакансии появились на этой неделе?» или «что писали про ИИ?».
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" class="filter-input chat-input"
+                   placeholder="Ваш вопрос…" maxlength="1000" />
+            <button id="chat-send-btn" class="btn-primary">Спросить</button>
+          </div>
         </div>
       </div>
 
