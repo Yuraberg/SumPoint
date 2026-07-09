@@ -97,10 +97,30 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd /root/vps-new/sumpoint
+            # Recorded so verify-deployment can roll the *code* back if the new
+            # deploy fails its health check. Forward-applied migrations in this
+            # repo are additive (no drops/renames), so rolling code back without
+            # reverting the schema is safe; this restores service, it does not
+            # revert schema changes.
+            git rev-parse HEAD > /root/vps-new/.last_deploy_prev_sha
             git fetch origin main
             git reset --hard origin/main
             cd /root/vps-new
             docker compose --env-file .env up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
+
+      - name: Ensure DB backup cron is installed
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: true  # best-effort; never blocks the deploy itself
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            CRON_LINE="0 3 * * * cd /root/vps-new/sumpoint && set -a && . /root/vps-new/.env && set +a && BACKUP_DIR=/root/vps-new/backups ./scripts/backup-db.sh --cron >> /root/vps-new/backup.log 2>&1"
+            ( crontab -l 2>/dev/null | grep -vF "backup-db.sh" ; echo "$CRON_LINE" ) | crontab -
+            echo "Backup cron entry present:"
+            crontab -l | grep "backup-db.sh"
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -112,12 +132,32 @@ jobs:
           script: |
             echo "Waiting for containers to start..."
             sleep 20
+
+            fail() {
+              echo "$1"
+              if [ -f /root/vps-new/.last_deploy_prev_sha ]; then
+                PREV_SHA=$(cat /root/vps-new/.last_deploy_prev_sha)
+                echo "Rolling back code to $PREV_SHA and redeploying..."
+                cd /root/vps-new/sumpoint
+                git reset --hard "$PREV_SHA"
+                cd /root/vps-new
+                docker compose --env-file .env up -d --build sumpoint-api sumpoint-bot sumpoint-worker sumpoint-beat
+              fi
+              exit 1
+            }
+
             # sumpoint-api has no host-published port on the VPS — the app is only
             # reachable through Caddy, so the health check runs inside the container.
-            docker exec sumpoint-api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)" \
-              || (echo "API health check FAILED" && exit 1)
-            docker inspect sumpoint-bot --format '{{.State.Status}}' | grep -q running || (echo "Bot not running" && exit 1)
-            docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || (echo "Worker not running" && exit 1)
-            docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || (echo "Beat not running" && exit 1)
+            # Hits /api/v1/health (checks DB + Redis), not the shallow /health that
+            # only proves the process answers HTTP.
+            docker exec sumpoint-api python3 -c "
+            import json, urllib.request
+            data = json.load(urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5))
+            assert data.get('status') == 'healthy', data" \
+              || fail "API deep health check FAILED (DB/Redis not ready)"
+            docker inspect sumpoint-bot --format '{{.State.Status}}' | grep -q running || fail "Bot not running"
+            docker inspect sumpoint-worker --format '{{.State.Status}}' | grep -q running || fail "Worker not running"
+            docker inspect sumpoint-beat --format '{{.State.Status}}' | grep -q running || fail "Beat not running"
             echo "All services healthy"
+            rm -f /root/vps-new/.last_deploy_prev_sha
             docker compose --env-file /root/vps-new/.env -f /root/vps-new/docker-compose.yml logs --tail=20 sumpoint-api

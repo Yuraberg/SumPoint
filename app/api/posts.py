@@ -1,12 +1,13 @@
 """Post retrieval and semantic search endpoints."""
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
 from app.database import get_db
 from app.models.post import Post
+from app.rate_limit import limiter
 from app.repositories import post_repository
 from app.repositories.post_repository import (
     escape_like as _escape_like,  # noqa: F401  (re-exported)
@@ -56,7 +57,9 @@ async def list_posts(
 
 
 @router.get("/search", response_model=list[PostOut])
+@limiter.limit("30/minute")
 async def search_posts(
+    request: Request,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     q: str = Query(..., min_length=2),
@@ -67,7 +70,9 @@ async def search_posts(
 
 
 @router.get("/semantic-search", response_model=list[PostOut])
+@limiter.limit("20/minute")
 async def semantic_search_posts(
+    request: Request,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     q: str = Query(..., min_length=2),

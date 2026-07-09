@@ -5,6 +5,7 @@ import logging
 from datetime import timedelta
 
 from sqlalchemy.exc import IntegrityError
+from telethon.errors import FloodWaitError
 
 from app.config import get_settings
 from app.constants import (
@@ -111,6 +112,24 @@ async def _fetch_user_channels(
                 await _fetch_channel(db, ingestion, channel)
                 channel_repository.mark_fetched(channel, utcnow())
                 await db.commit()
+            except FloodWaitError as e:
+                # Flood waits are enforced per-session (this user's Telethon
+                # client), not per-channel — trying the next channel would
+                # just hit the same wait again and risks compounding into a
+                # longer ban. Stop this user's channels for the tick instead
+                # of looping through the rest; the next scheduled tick will
+                # pick up where mark_fetched left off.
+                logger.warning(
+                    "Flood wait for user %s (%ss) on channel %s — stopping "
+                    "this user's channels for this tick",
+                    user.id, e.seconds, channel.title,
+                )
+                await _safe_rollback(db)
+                channel_repository.mark_fetched(
+                    channel, utcnow(), error=f"flood wait {e.seconds}s"
+                )
+                await _safe_commit(db)
+                break
             except Exception as e:
                 logger.warning(
                     "Skipping channel %s (%s): %s",

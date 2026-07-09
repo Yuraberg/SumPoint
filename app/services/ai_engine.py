@@ -52,6 +52,11 @@ def _get_client() -> AsyncOpenAI:
             api_key=settings.deepseek_api_key or None,
             base_url=settings.deepseek_base_url,
             max_retries=3,
+            # Without this the SDK falls back to httpx's 600s default — a
+            # hung DeepSeek call would stall the Celery task (and, via the
+            # asyncio.gather in process_post, the whole post) for 10 minutes
+            # before failing.
+            timeout=90.0,
         )
         _client_loop = loop
     return _client

@@ -1,8 +1,10 @@
 """FastAPI application entry point."""
 import logging
 import os
+import time
+import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -10,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.router import api_router
 from app.config import get_settings
+from app.logging import request_id_var
 from app.rate_limit import limiter
 
 _settings = get_settings()
@@ -64,6 +67,28 @@ app.add_middleware(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+_access_logger = logging.getLogger("app.access")
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Tag every request with an id so its log lines (and any exception
+    traceback) can be correlated back to a single user report, and expose it
+    in the response so the frontend/user can quote it back to us."""
+    req_id = str(uuid.uuid4())
+    token = request_id_var.set(req_id)
+    started = time.monotonic()
+    try:
+        response = await call_next(request)
+        duration_ms = round((time.monotonic() - started) * 1000, 1)
+        response.headers["X-Request-ID"] = req_id
+        _access_logger.info(
+            "%s %s %s %sms", request.method, request.url.path, response.status_code, duration_ms
+        )
+        return response
+    finally:
+        request_id_var.reset(token)
 
 # Production safeguard: warn if CORS_ORIGINS still points to localhost
 if not _settings.debug:
