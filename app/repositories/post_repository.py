@@ -1,11 +1,12 @@
 """Post queries: listing, keyword search, semantic search, dedup, digest feed."""
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import Row, or_, select, text
+from sqlalchemy import Row, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.channel import Channel
 from app.models.post import Post
+from app.utils.time import utcnow
 
 
 def escape_like(value: str) -> str:
@@ -21,6 +22,7 @@ async def list_for_user(
     channel_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    unread_only: bool = False,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Row]:
@@ -39,6 +41,8 @@ async def list_for_user(
         stmt = stmt.where(Post.category == category)
     if channel_id:
         stmt = stmt.where(Post.channel_id == channel_id)
+    if unread_only:
+        stmt = stmt.where(Post.read_at.is_(None))
     if date_from:
         stmt = stmt.where(
             Post.published_at >= datetime(date_from.year, date_from.month, date_from.day)
@@ -51,6 +55,69 @@ async def list_for_user(
         )
     stmt = stmt.order_by(Post.published_at.desc()).offset(offset).limit(limit)
     return (await db.execute(stmt)).all()
+
+
+# The unread subquery / update statements below all re-scope to the caller's
+# own posts (posts → channels.user_id) so one user can never read or mutate
+# another user's read state by guessing post ids.
+def _user_post_ids(user_id: int):
+    return (
+        select(Post.id)
+        .join(Channel, Post.channel_id == Channel.id)
+        .where(Channel.user_id == user_id)
+    )
+
+
+async def count_unread(db: AsyncSession, user_id: int) -> int:
+    """Number of unread, non-ad posts across all of the user's channels."""
+    stmt = (
+        select(func.count(Post.id))
+        .join(Channel, Post.channel_id == Channel.id)
+        .where(Channel.user_id == user_id)
+        .where(Post.is_ad.is_(False))
+        .where(Post.read_at.is_(None))
+    )
+    return (await db.execute(stmt)).scalar_one()
+
+
+async def mark_read(db: AsyncSession, user_id: int, post_ids: list[int]) -> int:
+    """Mark the given posts read (idempotent). Returns rows affected. Only
+    touches posts the user owns; ids they don't own are silently ignored."""
+    if not post_ids:
+        return 0
+    owned = _user_post_ids(user_id).where(Post.id.in_(post_ids)).subquery()
+    stmt = (
+        update(Post)
+        .where(Post.id.in_(select(owned.c.id)))
+        .where(Post.read_at.is_(None))
+        .values(read_at=utcnow())
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount or 0
+
+
+async def mark_all_read(
+    db: AsyncSession, user_id: int, *, category: str | None = None,
+    channel_id: int | None = None,
+) -> int:
+    """Mark every currently-unread post read, optionally scoped to the same
+    category/channel filter the feed is showing. Returns rows affected."""
+    owned = _user_post_ids(user_id)
+    if category:
+        owned = owned.where(Post.category == category)
+    if channel_id:
+        owned = owned.where(Post.channel_id == channel_id)
+    owned_sq = owned.subquery()
+    stmt = (
+        update(Post)
+        .where(Post.id.in_(select(owned_sq.c.id)))
+        .where(Post.read_at.is_(None))
+        .values(read_at=utcnow())
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount or 0
 
 
 async def keyword_search(
@@ -100,6 +167,7 @@ async def semantic_search(
         """
         SELECT p.id, p.channel_id, p.telegram_message_id, p.text,
                p.published_at, p.summary, p.category, p.is_ad, p.events,
+               p.read_at,
                c.username AS channel_username, c.title AS channel_title,
                p.embedding <=> CAST(:query_vec AS vector) AS similarity
         FROM posts p

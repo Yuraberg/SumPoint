@@ -4,9 +4,30 @@ const API = "/api/v1";
 let token = localStorage.getItem("sp_token") || null;
 let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
 
-let filters = { dateFrom: "", dateTo: "", category: "", channelId: "" };
+let filters = { dateFrom: "", dateTo: "", category: "", channelId: "", unreadOnly: false };
 let density = localStorage.getItem("sp_density") || "medium";
 let lastPosts = [];
+
+// Feed pagination / infinite-scroll state. searchMode disables paging because
+// search returns a single fixed result set, not an offset-able feed.
+const FEED_PAGE = 40;
+let feed = { offset: 0, loading: false, done: false, searchMode: false };
+let feedObserver = null;
+
+// ── Toasts (replaces blocking alert()) ────────────────────────────────────────
+function toast(message, type = "info", ms = 3500) {
+  const container = document.getElementById("toast-container");
+  if (!container) { console.log(`[${type}]`, message); return; }
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 250);
+  }, ms);
+}
 
 // ── Resizable table columns ──────────────────────────────────────────────────
 // Drags the header cell's own width (table-layout:fixed takes column widths
@@ -129,14 +150,14 @@ async function tryMagicLinkVerify() {
     const resp = await fetch(`${API}/auth/telegram/magic-link/verify?token=${encodeURIComponent(magicToken)}`);
     if (!resp.ok) {
       const err = await resp.json();
-      alert(err.detail || "Ссылка недействительна");
+      toast(err.detail || "Ссылка недействительна", "error");
       return false;
     }
     const { access_token } = await resp.json();
     setToken(access_token);
     return true;
   } catch (e) {
-    alert("Ошибка входа: " + e.message);
+    toast("Ошибка входа: " + e.message, "error");
     return false;
   }
 }
@@ -259,6 +280,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("import-btn").addEventListener("click", importChannels);
   document.getElementById("sync-btn").addEventListener("click", syncChannels);
 
+  // Unread controls
+  document.getElementById("unread-only").addEventListener("change", e => {
+    filters.unreadOnly = e.target.checked;
+    loadFeed();
+  });
+  document.getElementById("mark-all-read-btn").addEventListener("click", markAllRead);
+
   // Row density toggle — reflect the saved preference and wire up clicks.
   document.querySelectorAll(".density-btn").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.density === density);
@@ -308,6 +336,7 @@ function showApp() {
   document.getElementById("login-screen").style.display = "none";
   document.getElementById("app").style.display = "flex";
   loadChannelsDropdown();
+  refreshUnreadCount();
   navigate("posts");
 }
 
@@ -347,46 +376,119 @@ async function onTelegramAuth(data) {
     setToken(access_token);
     location.reload();
   } catch (e) {
-    alert("Ошибка входа: " + e.message);
+    toast("Ошибка входа: " + e.message, "error");
   }
 }
 
 // ── Feed (Posts Table) ────────────────────────────────────────────────────────
 
-async function loadFeed(overrideRows = null) {
-  const tbody = document.getElementById("posts-tbody");
-  const loader = document.getElementById("feed-loader");
-  const noPostsEl = document.getElementById("no-posts");
-  tbody.innerHTML = "";
-  loader.style.display = "block";
-  noPostsEl.style.display = "none";
+function buildFeedUrl(offset) {
+  let url = `/posts/?limit=${FEED_PAGE}&offset=${offset}`;
+  if (filters.category) url += `&category=${encodeURIComponent(filters.category)}`;
+  if (filters.channelId) url += `&channel_id=${filters.channelId}`;
+  if (filters.dateFrom) url += `&date_from=${filters.dateFrom}`;
+  if (filters.dateTo) url += `&date_to=${filters.dateTo}`;
+  if (filters.unreadOnly) url += `&unread_only=true`;
+  return url;
+}
 
-  try {
-    let data = overrideRows;
-    if (!data) {
-      let url = "/posts/?limit=80";
-      if (filters.category) url += `&category=${encodeURIComponent(filters.category)}`;
-      if (filters.channelId) url += `&channel_id=${filters.channelId}`;
-      if (filters.dateFrom) url += `&date_from=${filters.dateFrom}`;
-      if (filters.dateTo) url += `&date_to=${filters.dateTo}`;
-      data = await apiFetch(url);
-    }
-    loader.style.display = "none";
-    lastPosts = data || [];
-    if (!data || data.length === 0) {
-      noPostsEl.style.display = "block";
-      return;
-    }
-    renderPosts(data);
-  } catch (e) {
-    loader.style.display = "none";
-    tbody.innerHTML = `<tr><td colspan="5" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
+function showSkeletons(n = 6) {
+  const tbody = document.getElementById("posts-tbody");
+  const widths = ["70%", "90%", "60%", "80%", "75%", "85%"];
+  tbody.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const tr = document.createElement("tr");
+    tr.className = "skeleton-row";
+    tr.innerHTML = `
+      <td><div class="skeleton-bar" style="width:80%"></div></td>
+      <td><div class="skeleton-bar" style="width:16px"></div></td>
+      <td><div class="skeleton-bar" style="width:${widths[i % widths.length]}"></div></td>
+      <td><div class="skeleton-bar" style="width:50%"></div></td>
+      <td><div class="skeleton-bar" style="width:60%"></div></td>`;
+    tbody.appendChild(tr);
   }
 }
 
+// Search results arrive as a fixed array; paging is off (searchMode).
+async function loadFeed(overrideRows = null) {
+  const tbody = document.getElementById("posts-tbody");
+  const noPostsEl = document.getElementById("no-posts");
+  noPostsEl.style.display = "none";
+  document.getElementById("feed-loader").style.display = "none";
+
+  feed = { offset: 0, loading: false, done: false, searchMode: !!overrideRows };
+
+  if (overrideRows) {
+    lastPosts = overrideRows;
+    tbody.innerHTML = "";
+    if (overrideRows.length === 0) { noPostsEl.style.display = "block"; return; }
+    appendPosts(overrideRows);
+    feed.done = true;
+    return;
+  }
+
+  showSkeletons();
+  try {
+    const data = await apiFetch(buildFeedUrl(0));
+    lastPosts = data || [];
+    tbody.innerHTML = "";
+    if (!data || data.length === 0) {
+      noPostsEl.style.display = "block";
+      feed.done = true;
+      return;
+    }
+    appendPosts(data);
+    feed.offset = data.length;
+    feed.done = data.length < FEED_PAGE;
+    ensureFeedObserver();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="table-message">Ошибка загрузки: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function loadMorePosts() {
+  if (feed.loading || feed.done || feed.searchMode) return;
+  feed.loading = true;
+  const moreEl = document.getElementById("feed-more");
+  moreEl.style.display = "block";
+  try {
+    const data = await apiFetch(buildFeedUrl(feed.offset));
+    if (!data || data.length === 0) {
+      feed.done = true;
+    } else {
+      appendPosts(data);
+      lastPosts = lastPosts.concat(data);
+      feed.offset += data.length;
+      if (data.length < FEED_PAGE) feed.done = true;
+    }
+  } catch (e) {
+    toast("Не удалось загрузить ещё: " + e.message, "error");
+  } finally {
+    feed.loading = false;
+    moreEl.style.display = "none";
+  }
+}
+
+function ensureFeedObserver() {
+  const sentinel = document.getElementById("feed-sentinel");
+  if (!sentinel) return;
+  if (feedObserver) return;  // one observer for the lifetime of the page
+  feedObserver = new IntersectionObserver(entries => {
+    if (entries.some(en => en.isIntersecting)) loadMorePosts();
+  }, { rootMargin: "300px" });
+  feedObserver.observe(sentinel);
+}
+
+// Re-render the already-loaded posts in place (e.g. after a density change),
+// without refetching or resetting pagination.
 function renderPosts(data) {
   const tbody = document.getElementById("posts-tbody");
   tbody.innerHTML = "";
+  appendPosts(data);
+}
+
+function appendPosts(data) {
+  const tbody = document.getElementById("posts-tbody");
   data.forEach(post => {
     const { mainRow, detailRow } = renderPostRow(post);
     tbody.appendChild(mainRow);
@@ -416,7 +518,7 @@ function renderPostRow(post) {
     : null;
 
   const mainRow = document.createElement("tr");
-  mainRow.className = "data-row";
+  mainRow.className = "data-row" + (post.is_read ? " is-read" : "");
   mainRow.innerHTML = `
     <td class="cell-channel" title="${escHtml(channelName)}">${escHtml(channelShort)}</td>
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
@@ -453,9 +555,63 @@ function renderPostRow(post) {
     const open = detailRow.classList.contains("visible");
     mainRow.classList.toggle("expanded", !open);
     detailRow.classList.toggle("visible", !open);
+    // Opening a post marks it read (once).
+    if (!open && !post.is_read) markPostRead(post, mainRow);
   });
 
   return { mainRow, detailRow };
+}
+
+// ── Unread tracking ───────────────────────────────────────────────────────────
+async function markPostRead(post, rowEl) {
+  post.is_read = true;
+  rowEl.classList.add("is-read");
+  adjustUnreadBadge(-1);
+  try {
+    await apiFetch("/posts/mark-read", {
+      method: "POST",
+      body: JSON.stringify({ post_ids: [post.id] }),
+    });
+  } catch {
+    // Non-fatal — the row already shows as read; the count re-syncs on reload.
+  }
+}
+
+async function refreshUnreadCount() {
+  try {
+    const data = await apiFetch("/posts/unread-count");
+    setUnreadBadge(data ? data.count : 0);
+  } catch { /* leave the badge as-is on a transient error */ }
+}
+
+function setUnreadBadge(n) {
+  const el = document.getElementById("unread-badge");
+  if (!el) return;
+  el.textContent = n > 99 ? "99+" : String(n);
+  el.style.display = n > 0 ? "inline-flex" : "none";
+}
+
+function adjustUnreadBadge(delta) {
+  const el = document.getElementById("unread-badge");
+  if (!el) return;
+  const cur = parseInt(el.textContent, 10) || 0;
+  setUnreadBadge(Math.max(0, cur + delta));
+}
+
+async function markAllRead() {
+  try {
+    let url = "/posts/mark-all-read";
+    const params = [];
+    if (filters.category) params.push(`category=${encodeURIComponent(filters.category)}`);
+    if (filters.channelId) params.push(`channel_id=${filters.channelId}`);
+    if (params.length) url += "?" + params.join("&");
+    const res = await apiFetch(url, { method: "POST" });
+    toast(`Отмечено прочитанным: ${res ? res.marked : 0}`, "success");
+    await refreshUnreadCount();
+    loadFeed();
+  } catch (e) {
+    toast("Не удалось: " + e.message, "error");
+  }
 }
 
 function escHtml(str) {
@@ -486,7 +642,7 @@ async function runSearch() {
     const results = await apiFetch(`/posts/semantic-search?q=${encodeURIComponent(q)}&limit=80`);
     loadFeed(results);
   } catch (e) {
-    alert("Ошибка поиска: " + e.message);
+    toast("Ошибка поиска: " + e.message, "error");
   }
 }
 
@@ -689,7 +845,7 @@ async function addChannel() {
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
-    alert("Ошибка добавления: " + e.message);
+    toast("Ошибка добавления: " + e.message, "error");
   }
 }
 
@@ -700,7 +856,7 @@ async function removeChannel(id) {
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
-    alert("Ошибка удаления: " + e.message);
+    toast("Ошибка удаления: " + e.message, "error");
   }
 }
 
@@ -715,7 +871,7 @@ async function importChannels() {
     btn.textContent = `Добавлено ${data.imported} из ${data.total}`;
     setTimeout(() => { btn.textContent = "Импортировать мои каналы"; btn.disabled = false; }, 3000);
   } catch (e) {
-    alert("Ошибка импорта: " + e.message);
+    toast("Ошибка импорта: " + e.message, "error");
     btn.textContent = "Импортировать мои каналы";
     btn.disabled = false;
   }
@@ -729,7 +885,7 @@ async function syncChannels() {
     await apiFetch("/channels/sync", { method: "POST" });
     setTimeout(() => { loadFeed(); loadChannels(); }, 3000);
   } catch (e) {
-    alert("Ошибка: " + e.message);
+    toast("Ошибка: " + e.message, "error");
   } finally {
     btn.disabled = false;
     btn.textContent = "Синхронизировать";
@@ -813,7 +969,7 @@ async function toggleSchedule(id, btn) {
     btn.className = `status-btn ${data.status}`;
     btn.textContent = data.status === "active" ? "Активно" : "Пауза";
   } catch (e) {
-    alert("Ошибка: " + e.message);
+    toast("Ошибка: " + e.message, "error");
   }
 }
 
@@ -824,7 +980,7 @@ async function deleteSchedule(id) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadSchedule();
   } catch (e) {
-    alert("Ошибка: " + e.message);
+    toast("Ошибка: " + e.message, "error");
   }
 }
 
@@ -862,7 +1018,7 @@ function onPresetChange(sel) {
 
 async function createSchedule() {
   const name = document.getElementById("m-name").value.trim();
-  if (!name) { alert("Укажите название"); return; }
+  if (!name) { toast("Укажите название", "error"); return; }
 
   const schedule_type = document.querySelector(".type-btn.active")?.dataset.type || "topics";
 
@@ -870,7 +1026,7 @@ async function createSchedule() {
   const cron_expr = presetSel.value === "custom"
     ? document.getElementById("m-cron-custom").value.trim()
     : presetSel.value;
-  if (!cron_expr) { alert("Укажите расписание"); return; }
+  if (!cron_expr) { toast("Укажите расписание", "error"); return; }
 
   const hoursRadio = document.querySelector("input[name='m-hours']:checked");
   const hours_back = hoursRadio ? parseInt(hoursRadio.value) : 24;
@@ -888,6 +1044,6 @@ async function createSchedule() {
     closeSchedModal();
     loadSchedule();
   } catch (e) {
-    alert("Ошибка создания: " + e.message);
+    toast("Ошибка создания: " + e.message, "error");
   }
 }

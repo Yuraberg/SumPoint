@@ -1012,6 +1012,85 @@ body {
   white-space: normal;
 }
 
+/* ── Unread state ──────────────────────────────────────────────────────────── */
+.unread-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Read posts fade back; unread ones carry a left accent marker. */
+.posts-table tbody tr.data-row.is-read .cell-channel,
+.posts-table tbody tr.data-row.is-read .cell-post { color: var(--muted); font-weight: 400; }
+.posts-table tbody tr.data-row:not(.is-read) .cell-channel {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 11px;
+}
+
+.unread-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  height: 34px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.unread-check input { accent-color: var(--accent); cursor: pointer; }
+
+/* ── Skeleton loading rows ─────────────────────────────────────────────────── */
+.skeleton-bar {
+  height: 11px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ece8e1 25%, #f4f1ea 37%, #ece8e1 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ── Toasts ────────────────────────────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2000;
+}
+.toast {
+  min-width: 220px;
+  max-width: 360px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #fff;
+  background: #33302b;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  border-left: 3px solid var(--muted);
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity .22s, transform .22s;
+}
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast.success { border-left-color: var(--green); }
+.toast.error   { border-left-color: var(--red); }
+.toast.info    { border-left-color: var(--accent); }
+
 /* ── Semantic Search Similarity Badge ─────────────────────────────────────── */
 .sim-badge {
   display: inline-block;

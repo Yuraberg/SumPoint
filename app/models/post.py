@@ -54,4 +54,9 @@ class Post(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    # NULL = unread; a timestamp is when the user marked it read. Since a
+    # channel belongs to exactly one user, read state lives directly on the
+    # post — no per-user junction table needed.
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     channel: Mapped["Channel"] = relationship("Channel", back_populates="posts")

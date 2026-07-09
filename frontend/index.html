@@ -50,6 +50,7 @@
         <div class="nav-section-label">Инфополе</div>
         <a href="#" class="nav-item" data-page="posts">
           <span class="nav-icon">&#9783;</span> Посты
+          <span id="unread-badge" class="unread-badge" style="display:none">0</span>
         </a>
         <a href="#" class="nav-item" data-page="digest">
           <span class="nav-icon">&#9776;</span> Сводки
@@ -128,6 +129,14 @@
               <button class="density-btn" data-density="expanded">Расширенно</button>
             </div>
           </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <label class="unread-check"><input type="checkbox" id="unread-only" /> Непрочитанные</label>
+          </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <button id="mark-all-read-btn" class="btn-ghost-sm" style="height:34px">Прочитать всё</button>
+          </div>
           <div class="filter-search">
             <input type="text" id="search-input" placeholder="Поиск..." class="filter-input search-input" />
             <button id="search-btn" class="btn-search">Найти</button>
@@ -148,9 +157,11 @@
             <tbody id="posts-tbody"></tbody>
           </table>
           <div id="feed-loader" class="table-message" style="display:none">Загрузка…</div>
+          <div id="feed-more" class="table-message" style="display:none">Загрузка ещё…</div>
           <div id="no-posts" class="table-message" style="display:none">
             Нет постов. Добавьте каналы и нажмите «Синхронизировать» на странице Каналы.
           </div>
+          <div id="feed-sentinel" style="height:1px"></div>
         </div>
       </div>
 
@@ -363,6 +374,8 @@
 
     </main>
   </div>
+
+  <div id="toast-container" class="toast-container"></div>
 
   <script src="app.js"></script>
 </body>
