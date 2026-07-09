@@ -22,6 +22,38 @@
   --radius:    10px;
   --font:      -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+
+  /* Surfaces — overridden in the dark theme below. */
+  --surface-alt:   #f9fafb;   /* table header */
+  --row-hover:     #fbf3ee;
+  --row-expanded:  #f6e2d8;
+  --detail-bg:     #faf6f1;
+  --border-soft:   #f1f3f5;   /* row separators */
+  --tag-bg:        #f6e9e2;
+  --tag-text:      #a8562f;
+  --btn-sec-hover: #faf1ec;
+  color-scheme: light;
+}
+
+/* Dark theme — the sidebar was always dark; this brings the main content,
+   cards, tables and surfaces along with it. Set via data-theme on <html>
+   (see the inline head script + toggleTheme()), so it never flashes. */
+:root[data-theme="dark"] {
+  --main-bg:   #1b1917;
+  --card-bg:   #262321;
+  --text:      #ece7df;
+  --muted:     #a39c92;
+  --border:    #3a352f;
+
+  --surface-alt:   #2b2823;
+  --row-hover:     #302b25;
+  --row-expanded:  #3a2f28;
+  --detail-bg:     #211e1b;
+  --border-soft:   #332e29;
+  --tag-bg:        #3a2e28;
+  --tag-text:      #e6a184;
+  --btn-sec-hover: #302b25;
+  color-scheme: dark;
 }
 
 body {
@@ -277,7 +309,7 @@ body {
   text-transform: uppercase;
   letter-spacing: .7px;
   color: var(--muted);
-  background: #f9fafb;
+  background: var(--surface-alt);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -290,7 +322,7 @@ body {
 
 .posts-table td {
   padding: 11px 14px;
-  border-bottom: 1px solid #f1f3f5;
+  border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
   overflow: hidden;
 }
@@ -300,8 +332,8 @@ body {
   cursor: pointer;
   transition: background .1s;
 }
-.posts-table tbody tr.data-row:hover { background: #fbf3ee; }
-.posts-table tbody tr.data-row.expanded { background: #f6e2d8; }
+.posts-table tbody tr.data-row:hover { background: var(--row-hover); }
+.posts-table tbody tr.data-row.expanded { background: var(--row-expanded); }
 
 .cell-channel {
   font-size: 13px;
@@ -340,8 +372,8 @@ body {
 }
 .topic-tag {
   display: inline-block;
-  background: #f6e9e2;
-  color: #a8562f;
+  background: var(--tag-bg);
+  color: var(--tag-text);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 11px;
@@ -359,7 +391,7 @@ body {
 .detail-row.visible { display: table-row; }
 .detail-row > td {
   padding: 0;
-  background: #faf6f1;
+  background: var(--detail-bg);
   border-bottom: 1px solid var(--border);
 }
 .detail-inner {
@@ -389,7 +421,7 @@ body {
   word-break: break-word;
   max-height: 180px;
   overflow-y: auto;
-  background: #fff;
+  background: var(--card-bg);
   border: 1px solid var(--border);
   padding: 10px 12px;
   border-radius: 6px;
@@ -437,7 +469,7 @@ body {
   transition: border-color .12s, background .12s;
   font-family: var(--font);
 }
-.btn-secondary:hover { border-color: var(--accent); background: #faf1ec; }
+.btn-secondary:hover { border-color: var(--accent); background: var(--btn-sec-hover); }
 .btn-secondary:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── Digest Page ─────────────────────────────────────────────────────────────── */
@@ -475,7 +507,7 @@ body {
   text-transform: uppercase;
   letter-spacing: .7px;
   color: var(--muted);
-  background: #f9fafb;
+  background: var(--surface-alt);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -491,7 +523,7 @@ body {
 
 .events-table td {
   padding: 11px 14px;
-  border-bottom: 1px solid #f1f3f5;
+  border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
   overflow: hidden;
   font-size: 13px;
@@ -502,8 +534,8 @@ body {
   cursor: pointer;
   transition: background .1s;
 }
-.events-table tbody tr.data-row:hover { background: #fbf3ee; }
-.events-table tbody tr.data-row.expanded { background: #f6e2d8; }
+.events-table tbody tr.data-row:hover { background: var(--row-hover); }
+.events-table tbody tr.data-row.expanded { background: var(--row-expanded); }
 
 .cell-evdate {
   font-size: 12px;
@@ -536,7 +568,7 @@ body {
 }
 .ev-topic-tag {
   display: inline-block;
-  background: #f1f5f9;
+  background: var(--surface-alt);
   color: var(--muted);
   border-radius: 4px;
   padding: 2px 6px;
@@ -853,7 +885,7 @@ body {
   padding: 4px 10px;
   transition: border-color .12s, background .12s;
 }
-.cat-check:has(input:checked) { border-color: var(--accent); background: #f6e9e2; color: #a8562f; }
+.cat-check:has(input:checked) { border-color: var(--accent); background: var(--tag-bg); color: var(--tag-text); }
 .cat-check input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
 
 .sched-save-btn { align-self: flex-start; margin-top: 4px; }
@@ -1061,6 +1093,39 @@ body {
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
 }
+
+/* ── Keyboard navigation ───────────────────────────────────────────────────── */
+.posts-table tbody tr.data-row.kb-active {
+  background: var(--row-expanded);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.kbd-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.kbd-hint kbd {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+}
+
+/* ── Theme toggle (sidebar) ────────────────────────────────────────────────── */
+.sidebar-theme {
+  background: none;
+  border: 1px solid var(--sb-border);
+  color: var(--sb-text);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .12s, color .12s;
+}
+.sidebar-theme:hover { border-color: #8892a4; color: #e2e8f0; }
 
 /* ── Toasts ────────────────────────────────────────────────────────────────── */
 .toast-container {

@@ -7,6 +7,7 @@ let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.
 let filters = { dateFrom: "", dateTo: "", category: "", channelId: "", unreadOnly: false };
 let density = localStorage.getItem("sp_density") || "medium";
 let lastPosts = [];
+let lastEvents = [];
 
 // Feed pagination / infinite-scroll state. searchMode disables paging because
 // search returns a single fixed result set, not an offset-able feed.
@@ -27,6 +28,78 @@ function toast(message, type = "info", ms = 3500) {
     el.classList.remove("show");
     setTimeout(() => el.remove(), 250);
   }, ms);
+}
+
+// ── Theme (light / dark) ──────────────────────────────────────────────────────
+// The initial theme is applied by an inline <head> script to avoid a flash;
+// this just handles the toggle and keeps the button label in sync.
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") || "light";
+}
+function applyThemeButton() {
+  const btn = document.getElementById("theme-btn");
+  if (!btn) return;
+  btn.textContent = currentTheme() === "dark" ? "☀️ Светлая тема" : "🌙 Тёмная тема";
+}
+function toggleTheme() {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("sp_theme", next);
+  applyThemeButton();
+}
+
+// ── Keyboard navigation (posts page) ──────────────────────────────────────────
+let kbIndex = -1;
+
+function isPostsPageActive() {
+  const p = document.getElementById("page-posts");
+  return p && p.classList.contains("active");
+}
+
+function kbRows() {
+  return Array.from(document.querySelectorAll("#posts-tbody tr.data-row"));
+}
+
+function setKbActive(idx) {
+  const rows = kbRows();
+  rows.forEach(r => r.classList.remove("kb-active"));
+  if (idx < 0 || idx >= rows.length) { kbIndex = -1; return; }
+  kbIndex = idx;
+  const row = rows[idx];
+  row.classList.add("kb-active");
+  row.scrollIntoView({ block: "nearest" });
+}
+
+function handleFeedKey(e) {
+  const tag = (e.target.tagName || "").toLowerCase();
+  const typing = tag === "input" || tag === "textarea" || tag === "select";
+
+  // "/" focuses search from anywhere on the posts page.
+  if (e.key === "/" && !typing && isPostsPageActive()) {
+    e.preventDefault();
+    document.getElementById("search-input").focus();
+    return;
+  }
+  if (e.key === "Escape") {
+    if (typing) { e.target.blur(); return; }
+    const modal = document.getElementById("sched-modal");
+    if (modal && modal.style.display !== "none") { closeSchedModal(); return; }
+    setKbActive(-1);
+    return;
+  }
+  if (typing || !isPostsPageActive()) return;
+
+  const rows = kbRows();
+  if (e.key === "j") {
+    e.preventDefault();
+    setKbActive(Math.min((kbIndex < 0 ? -1 : kbIndex) + 1, rows.length - 1));
+    if (kbIndex >= rows.length - 3) loadMorePosts();
+  } else if (e.key === "k") {
+    e.preventDefault();
+    setKbActive(Math.max((kbIndex < 0 ? 1 : kbIndex) - 1, 0));
+  } else if (e.key === "o" || e.key === "Enter") {
+    if (kbIndex >= 0 && rows[kbIndex]) { e.preventDefault(); rows[kbIndex].click(); }
+  }
 }
 
 // ── Resizable table columns ──────────────────────────────────────────────────
@@ -271,6 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ev-filter-topic").addEventListener("change", loadEvents);
   document.getElementById("ev-filter-type").addEventListener("change", loadEvents);
   document.getElementById("ev-reset-btn").addEventListener("click", resetEventFilters);
+  document.getElementById("ev-ics-btn").addEventListener("click", exportEventsIcs);
 
   document.getElementById("gen-digest-btn").addEventListener("click", generateDigest);
   document.getElementById("add-channel-btn").addEventListener("click", addChannel);
@@ -286,6 +360,13 @@ document.addEventListener("DOMContentLoaded", () => {
     loadFeed();
   });
   document.getElementById("mark-all-read-btn").addEventListener("click", markAllRead);
+
+  // Theme toggle
+  applyThemeButton();
+  document.getElementById("theme-btn").addEventListener("click", toggleTheme);
+
+  // Keyboard navigation
+  document.addEventListener("keydown", handleFeedKey);
 
   // Row density toggle — reflect the saved preference and wire up clicks.
   document.querySelectorAll(".density-btn").forEach(btn => {
@@ -417,6 +498,7 @@ async function loadFeed(overrideRows = null) {
   document.getElementById("feed-loader").style.display = "none";
 
   feed = { offset: 0, loading: false, done: false, searchMode: !!overrideRows };
+  kbIndex = -1;
 
   if (overrideRows) {
     lastPosts = overrideRows;
@@ -708,6 +790,8 @@ async function loadEvents() {
       });
     }
 
+    lastEvents = events;  // what's currently shown — the .ics export uses this
+
     if (events.length === 0) {
       noEvEl.style.display = "block";
       return;
@@ -725,6 +809,80 @@ async function loadEvents() {
     loader.style.display = "none";
     tbody.innerHTML = `<tr><td colspan="8" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
   }
+}
+
+// ── Export events to an .ics calendar file ────────────────────────────────────
+function _icsEscape(s) {
+  return String(s || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+}
+
+function _icsDate(dateStr, timeStr) {
+  // dateStr is ISO "YYYY-MM-DD". timeStr may be "HH:MM" (freeform, optional).
+  const ymd = (dateStr || "").replace(/-/g, "");
+  if (!ymd || ymd.length !== 8) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(timeStr || "");
+  if (m) {
+    const hh = m[1].padStart(2, "0");
+    return { value: `${ymd}T${hh}${m[2]}00`, allDay: false };
+  }
+  return { value: ymd, allDay: true };
+}
+
+function buildIcs(events) {
+  const now = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//SumPoint//Events//RU",
+    "CALSCALE:GREGORIAN",
+  ];
+  let count = 0;
+  events.forEach((ev, i) => {
+    const dt = _icsDate(ev.date, ev.time);
+    if (!dt) return;  // skip events without a usable date
+    count++;
+    const descParts = [];
+    if (ev.location) descParts.push("Место: " + ev.location);
+    if (ev.channel_title) descParts.push("Канал: " + ev.channel_title);
+    if ((ev.speakers || []).length) descParts.push("Спикеры: " + ev.speakers.join(", "));
+    if (ev.link) descParts.push(ev.link);
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:sumpoint-${Date.now()}-${i}@sumpoint`);
+    lines.push(`DTSTAMP:${now}`);
+    lines.push(dt.allDay ? `DTSTART;VALUE=DATE:${dt.value}` : `DTSTART:${dt.value}`);
+    lines.push("SUMMARY:" + _icsEscape(ev.name || "Событие"));
+    if (ev.location) lines.push("LOCATION:" + _icsEscape(ev.location));
+    if (descParts.length) lines.push("DESCRIPTION:" + _icsEscape(descParts.join("\n")));
+    lines.push("END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  return { text: lines.join("\r\n"), count };
+}
+
+function exportEventsIcs() {
+  if (!lastEvents || lastEvents.length === 0) {
+    toast("Нет событий для экспорта", "error");
+    return;
+  }
+  const { text, count } = buildIcs(lastEvents);
+  if (count === 0) {
+    toast("У событий нет распознанных дат", "error");
+    return;
+  }
+  const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sumpoint-events.ics";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast(`Экспортировано событий: ${count}`, "success");
 }
 
 function populateTopicsDropdown(events) {

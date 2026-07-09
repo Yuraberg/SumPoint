@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SumPoint</title>
   <link rel="stylesheet" href="style.css" />
+  <script>
+    // Apply the saved (or OS-preferred) theme before first paint — no flash.
+    (function () {
+      var t = localStorage.getItem("sp_theme");
+      if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -70,6 +78,7 @@
 
       <div class="sidebar-footer">
         <div id="sidebar-user" class="sidebar-user"></div>
+        <button id="theme-btn" class="sidebar-theme">🌙 Тёмная тема</button>
         <button id="logout-btn" class="sidebar-logout">Выйти</button>
       </div>
     </aside>
@@ -163,6 +172,10 @@
           </div>
           <div id="feed-sentinel" style="height:1px"></div>
         </div>
+        <div class="kbd-hint">
+          Навигация: <kbd>j</kbd>/<kbd>k</kbd> — по постам, <kbd>o</kbd>/<kbd>Enter</kbd> — раскрыть,
+          <kbd>/</kbd> — поиск, <kbd>Esc</kbd> — закрыть.
+        </div>
       </div>
 
       <!-- СВОДКИ -->
@@ -218,6 +231,7 @@
             </select>
           </div>
           <button id="ev-reset-btn" class="btn-ghost-sm">Сбросить</button>
+          <button id="ev-ics-btn" class="btn-ghost-sm">📅 Экспорт .ics</button>
         </div>
 
         <div class="table-container">
