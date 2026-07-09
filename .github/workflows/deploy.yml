@@ -3,6 +3,8 @@ name: Deploy to VPS
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -78,6 +80,7 @@ jobs:
 
   deploy:
     needs: [test, integration]
+    if: github.event_name == 'push'  # test/integration gate PRs too, but never deploy from one
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
