@@ -48,6 +48,16 @@ FETCH_MESSAGE_LIMIT = 500
 # ── Embeddings ────────────────────────────────────────────────────────────────
 EMBEDDING_DIM = 1024  # BGE-M3
 
+# ── Duplicate clustering ──────────────────────────────────────────────────────
+# Same story reposted across channels is grouped by BGE-M3 embedding cosine
+# similarity. A new post joins an existing cluster if its nearest neighbour
+# (within the same user's channels, published within the window) is at least
+# this similar; otherwise it starts its own cluster. pgvector's `<=>` returns
+# cosine *distance* (1 - similarity), so the SQL compares against 1 - threshold.
+# Overridable via .env (CLUSTER_SIMILARITY_THRESHOLD / CLUSTER_WINDOW_DAYS).
+CLUSTER_SIMILARITY_THRESHOLD = 0.86
+CLUSTER_WINDOW_DAYS = 3
+
 # ── Ad detection heuristics ───────────────────────────────────────────────────
 AD_KEYWORDS = frozenset({
     "реклама", "спонсор", "промокод", "скидка",

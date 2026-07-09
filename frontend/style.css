@@ -1318,3 +1318,37 @@ body {
   padding-left: 19px;
   word-break: break-word;
 }
+
+/* ── Duplicate-cluster badge + sources ────────────────────────────────────── */
+.dup-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background .15s;
+}
+.dup-badge:hover { background: var(--accent-dark); }
+
+.cluster-src {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.cluster-src:last-child { border-bottom: none; }
+.cluster-src-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cluster-src-name { font-weight: 600; color: var(--text); font-size: 14px; }
+.cluster-src-date { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.cluster-src-sum { color: var(--muted); font-size: 13px; margin: 5px 0 6px; line-height: 1.4; }
+.cluster-src-link { color: var(--accent); font-size: 13px; text-decoration: none; }
+.cluster-src-link:hover { text-decoration: underline; }

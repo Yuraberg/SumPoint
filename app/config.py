@@ -2,7 +2,11 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.constants import DEFAULT_MODEL
+from app.constants import (
+    CLUSTER_SIMILARITY_THRESHOLD,
+    CLUSTER_WINDOW_DAYS,
+    DEFAULT_MODEL,
+)
 
 
 class Settings(BaseSettings):
@@ -54,6 +58,12 @@ class Settings(BaseSettings):
     # polling stays spread out instead of bursting and risking a flood ban.
     posts_fetch_interval_minutes: int = 20
     posts_fetch_batch_size: int = 20
+
+    # Duplicate clustering (see app/services/clustering.py). Set
+    # clustering_enabled=false to skip cluster assignment entirely.
+    clustering_enabled: bool = True
+    cluster_similarity_threshold: float = CLUSTER_SIMILARITY_THRESHOLD
+    cluster_window_days: int = CLUSTER_WINDOW_DAYS
 
     # Debug
     debug: bool = False

@@ -18,8 +18,20 @@ class PostOut(BaseModel):
     channel_title: str | None = None
     similarity: float | None = None  # cosine distance for semantic search
     is_read: bool = False
+    cluster_id: int | None = None
+    cluster_size: int = 1  # distinct channels sharing this post's duplicate-cluster
 
     model_config = {"from_attributes": True}
+
+
+class ClusterMember(BaseModel):
+    id: int
+    channel_id: int
+    telegram_message_id: int
+    published_at: datetime
+    summary: str | None = None
+    channel_username: str | None = None
+    channel_title: str | None = None
 
 
 class DigestOut(BaseModel):

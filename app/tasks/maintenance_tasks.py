@@ -101,3 +101,49 @@ def uptime_kuma_heartbeat():
         httpx.get(url, timeout=10)
     except Exception as e:
         logger.warning("Uptime Kuma heartbeat failed: %s", e)
+
+
+@celery_app.task(name="app.tasks.maintenance_tasks.backfill_clusters")
+def backfill_clusters(reset: bool = False) -> dict:
+    """One-off (re)assignment of duplicate-cluster ids over existing posts.
+
+    Run once after deploying the clustering feature so historical posts get
+    grouped (new posts are clustered at ingestion). Pass reset=True to clear
+    and recompute every cluster_id, e.g. after changing the similarity
+    threshold. Safe to re-run: without reset it only touches unclustered posts.
+    """
+    return run(_async_backfill_clusters(reset))
+
+
+async def _async_backfill_clusters(reset: bool) -> dict:
+    from sqlalchemy import select, text
+
+    from app.models.post import Post
+    from app.models.user import User
+    from app.services.clustering import assign_cluster
+
+    async with AsyncSessionLocal() as db:
+        if reset:
+            await db.execute(text("UPDATE posts SET cluster_id = NULL"))
+            await db.commit()
+
+        user_ids = (await db.execute(select(User.id))).scalars().all()
+        total = 0
+        for uid in user_ids:
+            # Oldest first so each post can attach to already-clustered earlier
+            # ones; the per-post flush inside assign_cluster makes them visible.
+            q = (
+                select(Post)
+                .join(Channel, Post.channel_id == Channel.id)
+                .where(Channel.user_id == uid)
+                .where(Post.cluster_id.is_(None))
+                .where(Post.is_ad.is_(False))
+                .order_by(Post.published_at.asc())
+            )
+            posts = (await db.execute(q)).scalars().all()
+            for post in posts:
+                await assign_cluster(db, post, uid, flush=True)
+                total += 1
+            await db.commit()
+        logger.info("backfill_clusters done: %d posts clustered", total)
+        return {"clustered": total, "users": len(user_ids)}

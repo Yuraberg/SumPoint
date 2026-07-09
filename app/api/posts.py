@@ -13,7 +13,7 @@ from app.repositories import post_repository
 from app.repositories.post_repository import (
     escape_like as _escape_like,  # noqa: F401  (re-exported)
 )
-from app.schemas.post import PostOut
+from app.schemas.post import ClusterMember, PostOut
 from app.services.ai_engine import generate_embedding
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -24,7 +24,7 @@ class MarkReadIn(BaseModel):
 
 
 def _to_post_out(post: Post, channel_username: str | None, channel_title: str | None,
-                 similarity: float | None = None) -> PostOut:
+                 similarity: float | None = None, cluster_size: int | None = None) -> PostOut:
     return PostOut(
         id=post.id,
         channel_id=post.channel_id,
@@ -39,6 +39,8 @@ def _to_post_out(post: Post, channel_username: str | None, channel_title: str | 
         channel_title=channel_title,
         similarity=similarity,
         is_read=getattr(post, "read_at", None) is not None,
+        cluster_id=getattr(post, "cluster_id", None),
+        cluster_size=max(cluster_size or 1, 1),
     )
 
 
@@ -61,7 +63,11 @@ async def list_posts(
         unread_only=unread_only,
         limit=limit, offset=offset,
     )
-    return [_to_post_out(row.Post, row.channel_username, row.channel_title) for row in rows]
+    return [
+        _to_post_out(row.Post, row.channel_username, row.channel_title,
+                     cluster_size=row.cluster_size)
+        for row in rows
+    ]
 
 
 @router.get("/unread-count")
@@ -93,6 +99,29 @@ async def mark_all_posts_read(
         db, current_user.id, category=category, channel_id=channel_id
     )
     return {"marked": n}
+
+
+@router.get("/cluster/{cluster_id}", response_model=list[ClusterMember])
+async def cluster_members(
+    cluster_id: int,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Sources (posts) that make up a duplicate-cluster — powers the
+    "также в N каналах" popover in the feed."""
+    rows = await post_repository.get_cluster_members(db, current_user.id, cluster_id)
+    return [
+        ClusterMember(
+            id=r.id,
+            channel_id=r.channel_id,
+            telegram_message_id=r.telegram_message_id,
+            published_at=r.published_at,
+            summary=r.summary,
+            channel_username=r.channel_username,
+            channel_title=r.channel_title,
+        )
+        for r in rows
+    ]
 
 
 @router.get("/search", response_model=list[PostOut])

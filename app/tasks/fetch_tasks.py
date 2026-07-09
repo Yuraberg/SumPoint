@@ -28,6 +28,7 @@ from app.repositories import (
     user_repository,
 )
 from app.services.ai_engine import process_post
+from app.services.clustering import assign_cluster
 from app.services.telegram_ingestion import TelegramIngestion
 from app.tasks.base import get_bot, run
 from app.tasks.celery_app import celery_app
@@ -211,6 +212,17 @@ async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> 
                 raw_post["telegram_message_id"], channel.title,
             )
             continue
+
+        # Group near-duplicate reposts across channels. Isolated in its own
+        # savepoint so a clustering hiccup never discards the stored post.
+        try:
+            async with db.begin_nested():
+                await assign_cluster(db, post, channel.user_id)
+        except Exception:
+            logger.exception(
+                "Cluster assignment failed for post %s in channel %s",
+                post.id, channel.title,
+            )
 
         await _notify_keyword_alerts(db, channel, post)
 

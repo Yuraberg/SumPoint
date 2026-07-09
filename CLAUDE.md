@@ -71,8 +71,11 @@ python generate_session.py
 - `GET /posts/` — paginated feed; query params: `category`, `channel_id`, `date_from`, `date_to` (ISO dates), `limit`, `offset`
 - `GET /posts/search` — ILIKE text search over `posts.text`
 - `GET /posts/semantic-search` — pgvector cosine search (`embedding <=> query_vec`) over BGE-M3 embeddings
+- `GET /posts/cluster/{cluster_id}` — sources (posts) making up a duplicate-cluster; powers the "также в N каналах" feed badge
 - `GET /digest/` — builds and returns a markdown digest for the last N hours
 - `GET /digest/events` — upcoming calendar events extracted from stored posts
+- `GET /stats/overview?days=N` — analytics dashboard: totals, posts-per-day (zero-filled), per-category and top-channel breakdowns
+- `GET /stats/channel-health` — per-channel post/unread counts, fetch freshness and last_error for the Channels health panel
 
 ### Post processing pipeline
 New posts flow through the Celery worker only (never the API container):
@@ -80,6 +83,7 @@ New posts flow through the Celery worker only (never the API container):
 1. **Ingestion** (`app/services/telegram_ingestion.py`) — Telethon fetches raw messages, pre-filters ads by keyword heuristics, deduplicates in-memory by SHA-256 content hash within the run (the hash is also returned to the caller for cross-run dedup, see below).
 2. **AI processing** (`app/services/ai_engine.py`, fully async via `AsyncOpenAI`/`httpx.AsyncClient`) — `process_post()` calls DeepSeek three times: `classify_post()` → `summarise_post()` → `extract_events()`. Uses `deepseek-chat` via the OpenAI SDK (`base_url="https://api.deepseek.com"`). `<thought>` blocks are stripped by regex before parsing. `generate_embedding()` calls Ollama BGE-M3 (`/api/embeddings`) for a 1024-dim vector, falling back to a zero-vector if Ollama is unreachable.
 3. **Storage** — Processed posts written to the `posts` table with `category`, `summary`, `events` (JSON), and `embedding`.
+4. **Duplicate clustering** (`app/services/clustering.py`) — after the insert flushes, `assign_cluster()` runs one pgvector nearest-neighbour query (scoped to the same user's channels, within `CLUSTER_WINDOW_DAYS`) and adopts the neighbour's `cluster_id` if cosine similarity ≥ `CLUSTER_SIMILARITY_THRESHOLD` (default 0.86); otherwise the post starts its own cluster (`cluster_id = own id`). The feed then shows "также в N каналах" (distinct channels sharing the cluster). **Graceful degradation:** two zero-vectors have cosine distance 0, so an unavailable BGE-M3 (zero-vector fallback) would falsely merge everything — `is_usable_embedding()` guards against this, leaving embedding-less posts unclustered (`cluster_id` stays NULL / singleton) instead of merging. Clustering runs in its own savepoint so a hiccup never discards the stored post. Set `CLUSTERING_ENABLED=false` to skip it entirely. New posts are clustered at ingestion; to group **historical** posts once after deploy, run the `backfill_clusters` Celery task (`celery -A app.tasks.celery_app call app.tasks.maintenance_tasks.backfill_clusters`; pass `--args='[true]'` to reset & recompute after changing the threshold).
 
 `fetch_all_channels` Celery task runs continuously every `POSTS_FETCH_INTERVAL_MINUTES` (default 20), each tick processing only `POSTS_FETCH_BATCH_SIZE` channels (default 20) ordered by oldest `last_fetched_at` first — this spreads Telethon traffic out instead of bursting through every channel at once (flood-ban risk), while still cycling through all channels over time. A Redis `SET NX` lock (`sumpoint:fetch_lock`, 600s TTL) prevents an overlapping run (e.g. a manual `/channels/sync` firing mid-tick) from racing the scheduled one. Commits per channel inside a try/except so one failing channel doesn't block others; the error is also saved to `Channel.last_error` so it's visible via the API/frontend instead of only in worker logs. Users without `session_path` AND without `TELEGRAM_SESSION_STRING` are skipped.
 

@@ -51,6 +51,13 @@ class Post(Base):
     # pgvector embedding for semantic search
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
 
+    # Duplicate-cluster id: the id of the cluster's earliest (representative)
+    # post; a singleton post points at itself. Assigned at ingestion via
+    # embedding cosine-similarity (see app/services/clustering.py). NULL only
+    # for posts whose embedding was unavailable (BGE-M3 down → zero-vector),
+    # which are intentionally left unclustered rather than falsely merged.
+    cluster_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

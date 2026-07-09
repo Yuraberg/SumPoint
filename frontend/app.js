@@ -82,6 +82,8 @@ function handleFeedKey(e) {
   }
   if (e.key === "Escape") {
     if (typing) { e.target.blur(); return; }
+    const cluster = document.getElementById("cluster-modal");
+    if (cluster && cluster.style.display !== "none") { closeClusterModal(); return; }
     const modal = document.getElementById("sched-modal");
     if (modal && modal.style.display !== "none") { closeSchedModal(); return; }
     setKbActive(-1);
@@ -603,15 +605,27 @@ function renderPostRow(post) {
     ? `https://t.me/${post.channel_username}/${post.telegram_message_id}`
     : null;
 
+  const dupBadge = (post.cluster_size && post.cluster_size > 1 && post.cluster_id != null)
+    ? `<span class="dup-badge" data-cluster="${post.cluster_id}" title="Эта новость в ${post.cluster_size} каналах — показать источники">⧉ ${post.cluster_size} каналах</span>`
+    : "";
+
   const mainRow = document.createElement("tr");
   mainRow.className = "data-row" + (post.is_read ? " is-read" : "");
   mainRow.innerHTML = `
     <td class="cell-channel" title="${escHtml(channelName)}">${escHtml(channelShort)}</td>
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
     <td class="cell-post" title="${escHtml(rawText.slice(0, 300))}">${escHtml(preview)}</td>
-    <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(post.category)}</span>` : ""}</td>
+    <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(post.category)}</span>` : ""}${dupBadge}</td>
     <td class="cell-date">${simBadge} ${date}</td>
   `;
+
+  const badgeEl = mainRow.querySelector(".dup-badge");
+  if (badgeEl) {
+    badgeEl.addEventListener("click", e => {
+      e.stopPropagation();  // don't toggle the row
+      openClusterModal(post.cluster_id);
+    });
+  }
 
   const detailRow = document.createElement("tr");
   detailRow.className = "detail-row";
@@ -646,6 +660,50 @@ function renderPostRow(post) {
   });
 
   return { mainRow, detailRow };
+}
+
+// ── Duplicate-cluster sources ───────────────────────────────────────────────
+async function openClusterModal(clusterId) {
+  const modal = document.getElementById("cluster-modal");
+  const body = document.getElementById("cluster-modal-body");
+  if (!modal || !body) return;
+  body.innerHTML = "<div class='table-message'>Загрузка…</div>";
+  modal.style.display = "flex";
+  try {
+    const rows = await apiFetch(`/posts/cluster/${clusterId}`);
+    if (!rows || !rows.length) {
+      body.innerHTML = "<div class='table-message'>Источники не найдены.</div>";
+      return;
+    }
+    body.innerHTML = rows.map(r => {
+      const name = escHtml(r.channel_title || r.channel_username || "—");
+      const date = new Date(r.published_at).toLocaleString("ru-RU",
+        { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const link = r.channel_username
+        ? sanitizeUrl(`https://t.me/${r.channel_username}/${r.telegram_message_id}`)
+        : null;
+      const openLink = link
+        ? `<a class="cluster-src-link" href="${escHtml(link)}" target="_blank" rel="noopener">→ Открыть</a>`
+        : "";
+      return `<div class="cluster-src">
+        <div class="cluster-src-head">
+          <span class="cluster-src-name">${name}</span>
+          <span class="cluster-src-date">${date}</span>
+        </div>
+        ${r.summary ? `<div class="cluster-src-sum">${escHtml(r.summary)}</div>` : ""}
+        ${openLink}
+      </div>`;
+    }).join("");
+  } catch (e) {
+    body.innerHTML = "<div class='table-message'>Ошибка загрузки источников.</div>";
+    toast("Не удалось загрузить источники: " + e.message, "error");
+  }
+}
+
+function closeClusterModal(e) {
+  if (e && e.target && e.target.id !== "cluster-modal" && e.target.id !== "cluster-modal-close") return;
+  const modal = document.getElementById("cluster-modal");
+  if (modal) modal.style.display = "none";
 }
 
 // ── Unread tracking ───────────────────────────────────────────────────────────

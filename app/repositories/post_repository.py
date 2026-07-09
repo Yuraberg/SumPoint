@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import Row, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.channel import Channel
 from app.models.post import Post
@@ -26,12 +27,28 @@ async def list_for_user(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Row]:
-    """Rows of (Post, channel_username, channel_title) for the feed view."""
+    """Rows of (Post, channel_username, channel_title, cluster_size) for the
+    feed view. ``cluster_size`` is the number of distinct channels sharing this
+    post's duplicate-cluster (1 = unique), used for the "также в N каналах"
+    badge. Computed globally, independent of the feed's date/category filter."""
+    P2 = aliased(Post)
+    C2 = aliased(Channel)
+    cluster_size = (
+        select(func.count(func.distinct(P2.channel_id)))
+        .select_from(P2)
+        .join(C2, C2.id == P2.channel_id)
+        .where(C2.user_id == user_id)
+        .where(P2.cluster_id == Post.cluster_id)
+        .correlate(Post)
+        .scalar_subquery()
+        .label("cluster_size")
+    )
     stmt = (
         select(
             Post,
             Channel.username.label("channel_username"),
             Channel.title.label("channel_title"),
+            cluster_size,
         )
         .join(Channel, Post.channel_id == Channel.id)
         .where(Channel.user_id == user_id)
@@ -118,6 +135,30 @@ async def mark_all_read(
     result = await db.execute(stmt)
     await db.commit()
     return result.rowcount or 0
+
+
+async def get_cluster_members(
+    db: AsyncSession, user_id: int, cluster_id: int
+) -> list[Row]:
+    """All posts in a duplicate-cluster the user owns, newest first — for the
+    "sources" popover behind the feed badge. Owner-scoped so a guessed
+    cluster_id can't leak another user's posts."""
+    stmt = (
+        select(
+            Post.id,
+            Post.channel_id,
+            Post.telegram_message_id,
+            Post.published_at,
+            Post.summary,
+            Channel.username.label("channel_username"),
+            Channel.title.label("channel_title"),
+        )
+        .join(Channel, Post.channel_id == Channel.id)
+        .where(Channel.user_id == user_id)
+        .where(Post.cluster_id == cluster_id)
+        .order_by(Post.published_at.desc())
+    )
+    return (await db.execute(stmt)).all()
 
 
 async def keyword_search(

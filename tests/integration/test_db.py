@@ -186,3 +186,78 @@ async def test_stats_aggregates_and_ownership(engine, _create_tables):
         assert health["News"]["unread_count"] == 1
         assert health["Tech"]["post_count"] == 1
         assert "Bob" not in health  # ownership scoping
+
+
+@pytest.mark.integration
+async def test_duplicate_clustering(engine, _create_tables):
+    """assign_cluster groups near-identical embeddings across a user's channels,
+    keeps distinct posts apart, never merges zero-vector (BGE-M3 down) posts, and
+    the feed reports the right cluster_size — all owner-scoped."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.constants import EMBEDDING_DIM
+    from app.models.channel import Channel
+    from app.models.post import Post
+    from app.models.user import User
+    from app.repositories import post_repository
+    from app.services.clustering import assign_cluster
+    from app.utils.time import utcnow
+
+    def vec(*head):
+        v = [0.0] * EMBEDDING_DIM
+        for i, x in enumerate(head):
+            v[i] = float(x)
+        return v
+
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessionmaker() as db:
+        db.add_all([User(id=1, first_name="Alice"), User(id=2, first_name="Bob")])
+        await db.flush()
+        db.add_all([
+            Channel(id=10, telegram_id=100, user_id=1, title="A"),
+            Channel(id=11, telegram_id=101, user_id=1, title="B"),
+            Channel(id=20, telegram_id=200, user_id=2, title="Bob"),
+        ])
+        await db.flush()
+
+        now = utcnow()
+        # Two near-identical stories in different channels, one distinct story,
+        # and one with a zero-vector (embedding unavailable).
+        p_a = Post(channel_id=10, telegram_message_id=1, text="dup", published_at=now,
+                   is_ad=False, embedding=vec(1.0, 0.01))
+        p_b = Post(channel_id=11, telegram_message_id=2, text="dup", published_at=now,
+                   is_ad=False, embedding=vec(1.0, 0.02))
+        p_c = Post(channel_id=10, telegram_message_id=3, text="other", published_at=now,
+                   is_ad=False, embedding=vec(0.0, 1.0))
+        p_z1 = Post(channel_id=10, telegram_message_id=4, text="z1", published_at=now,
+                    is_ad=False, embedding=vec())          # zero vector
+        p_z2 = Post(channel_id=11, telegram_message_id=5, text="z2", published_at=now,
+                    is_ad=False, embedding=vec())          # zero vector
+        for p in (p_a, p_b, p_c, p_z1, p_z2):
+            db.add(p)
+            await db.flush()
+            await assign_cluster(db, p, 1)
+        await db.commit()
+
+        # Near-identical posts landed in the same cluster.
+        assert p_a.cluster_id == p_b.cluster_id
+        # The distinct post is its own singleton cluster.
+        assert p_c.cluster_id == p_c.id
+        assert p_c.cluster_id != p_a.cluster_id
+        # Zero-vector posts stay singletons and never merge with each other.
+        assert p_z1.cluster_id == p_z1.id
+        assert p_z2.cluster_id == p_z2.id
+        assert p_z1.cluster_id != p_z2.cluster_id
+
+        # Feed cluster_size: the duplicated story spans 2 channels; others = 1.
+        rows = {r.Post.id: r.cluster_size
+                for r in await post_repository.list_for_user(db, 1)}
+        assert rows[p_a.id] == 2
+        assert rows[p_b.id] == 2
+        assert rows[p_c.id] == 1
+        assert rows[p_z1.id] == 1
+
+        # Cluster members are owner-scoped and list every source in the cluster.
+        members = await post_repository.get_cluster_members(db, 1, p_a.cluster_id)
+        assert {m.id for m in members} == {p_a.id, p_b.id}
+        assert await post_repository.get_cluster_members(db, 2, p_a.cluster_id) == []

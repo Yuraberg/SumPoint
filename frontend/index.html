@@ -428,6 +428,17 @@
     </main>
   </div>
 
+  <!-- DUPLICATE CLUSTER SOURCES MODAL -->
+  <div id="cluster-modal" class="modal-backdrop" style="display:none" onclick="closeClusterModal(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 class="modal-title">Источники новости</h2>
+        <button id="cluster-modal-close" class="modal-close" onclick="closeClusterModal()">✕</button>
+      </div>
+      <div class="modal-body" id="cluster-modal-body"></div>
+    </div>
+  </div>
+
   <div id="toast-container" class="toast-container"></div>
 
   <script src="app.js"></script>
