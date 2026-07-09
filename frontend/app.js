@@ -365,6 +365,9 @@ document.addEventListener("DOMContentLoaded", () => {
   applyThemeButton();
   document.getElementById("theme-btn").addEventListener("click", toggleTheme);
 
+  const statsDays = document.getElementById("stats-days");
+  if (statsDays) statsDays.addEventListener("change", loadStats);
+
   // Keyboard navigation
   document.addEventListener("keydown", handleFeedKey);
 
@@ -439,6 +442,7 @@ function navigate(page) {
 
   if (page === "posts") loadFeed();
   else if (page === "events") loadEvents();
+  else if (page === "stats") loadStats();
   else if (page === "channels") loadChannels();
   else if (page === "schedule") loadSchedule();
 }
@@ -748,6 +752,73 @@ async function loadChannelsDropdown() {
   }
 }
 
+// ── Statistics ────────────────────────────────────────────────────────────────
+
+async function loadStats() {
+  const loader = document.getElementById("stats-loader");
+  const daysSel = document.getElementById("stats-days");
+  const days = daysSel ? daysSel.value : 30;
+  if (loader) loader.style.display = "block";
+  try {
+    const data = await apiFetch(`/stats/overview?days=${days}`);
+    if (loader) loader.style.display = "none";
+    if (!data) return;
+    renderStatCards(data.totals);
+    renderDayChart(data.per_day);
+    renderBarList("stats-percat", data.per_category, r => r.category);
+    renderBarList("stats-perchan", data.per_channel, r => r.title || r.username || "—");
+  } catch (e) {
+    if (loader) loader.style.display = "none";
+    toast("Не удалось загрузить статистику: " + e.message, "error");
+  }
+}
+
+function renderStatCards(t) {
+  const el = document.getElementById("stats-cards");
+  if (!el || !t) return;
+  const cards = [
+    { label: "Постов", value: t.posts, accent: false },
+    { label: "Непрочитано", value: t.unread, accent: true },
+    { label: "С событиями", value: t.events, accent: false },
+    { label: "Каналов", value: t.channels, accent: false },
+  ];
+  el.innerHTML = cards.map(c => `
+    <div class="stat-card${c.accent ? " accent" : ""}">
+      <div class="stat-value">${c.value}</div>
+      <div class="stat-label">${c.label}</div>
+    </div>`).join("");
+}
+
+function renderDayChart(days) {
+  const el = document.getElementById("stats-perday");
+  if (!el) return;
+  if (!days || !days.length) { el.innerHTML = "<span style='color:var(--muted);font-size:13px'>Нет данных</span>"; return; }
+  const max = Math.max(1, ...days.map(d => d.count));
+  el.innerHTML = days.map(d => {
+    const pct = (d.count / max) * 100;
+    const label = new Date(d.date + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    return `<div class="day-bar" title="${label}: ${d.count}">
+      <div class="day-tip">${label}: ${d.count}</div>
+      <div class="day-fill" style="height:${pct}%"></div>
+    </div>`;
+  }).join("");
+}
+
+function renderBarList(elId, rows, nameFn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!rows || !rows.length) { el.innerHTML = "<span style='color:var(--muted);font-size:13px'>Нет данных</span>"; return; }
+  const max = Math.max(1, ...rows.map(r => r.count));
+  el.innerHTML = rows.map(r => {
+    const pct = (r.count / max) * 100;
+    return `<div class="bar-row">
+      <span class="bar-name" title="${escHtml(nameFn(r))}">${escHtml(nameFn(r))}</span>
+      <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
+      <span class="bar-count">${r.count}</span>
+    </div>`;
+  }).join("");
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 function resetEventFilters() {
@@ -965,21 +1036,58 @@ function renderEventRow(ev) {
 
 // ── Channels ──────────────────────────────────────────────────────────────────
 
+function _fmtAgo(iso) {
+  if (!iso) return "никогда";
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return "—";
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return "только что";
+  if (mins < 60) return `${mins} мин назад`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} ч назад`;
+  const days = Math.floor(hrs / 24);
+  return `${days} дн назад`;
+}
+
+function _healthState(ch) {
+  // err > stale (>24h since last fetch) > empty (never produced posts) > ok
+  if (ch.last_error) return "err";
+  if (!ch.last_fetched_at) return "empty";
+  const ageH = (Date.now() - new Date(ch.last_fetched_at).getTime()) / 3600000;
+  if (ageH > 24) return "stale";
+  if (ch.post_count === 0) return "empty";
+  return "ok";
+}
+
 async function loadChannels() {
+  const list = document.getElementById("channels-list");
+  if (!list) return;
   try {
-    const data = await apiFetch("/channels/");
-    const list = document.getElementById("channels-list");
+    const data = await apiFetch("/stats/channel-health");
     list.innerHTML = "";
     if (!data || data.length === 0) {
       list.innerHTML = "<li style='color:var(--muted);font-size:13px;padding:10px 0;'>Каналов нет</li>";
       return;
     }
     data.forEach(ch => {
+      const state = _healthState(ch);
       const li = document.createElement("li");
-      li.className = "channel-item";
+      li.className = "channel-item health";
+      const errBlock = ch.last_error
+        ? `<div class="channel-health-err" title="${escHtml(ch.last_error)}">⚠ ${escHtml(ch.last_error)}</div>`
+        : "";
       li.innerHTML = `
-        <span class="channel-item-name">${escHtml(ch.title || ch.username || String(ch.telegram_id))}</span>
-        <button class="channel-remove" onclick="removeChannel(${ch.id})">✕</button>
+        <div class="channel-health-top">
+          <span class="ch-dot ${state}" title="${state}"></span>
+          <span class="channel-item-name">${escHtml(ch.title || ch.username || String(ch.channel_id))}</span>
+          <button class="channel-remove" onclick="removeChannel(${ch.channel_id})">✕</button>
+        </div>
+        <div class="channel-health-meta">
+          <span>Постов: <b>${ch.post_count}</b></span>
+          <span>Непрочитано: <b>${ch.unread_count}</b></span>
+          <span>Сбор: <b>${_fmtAgo(ch.last_fetched_at)}</b></span>
+        </div>
+        ${errBlock}
       `;
       list.appendChild(li);
     });

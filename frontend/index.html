@@ -66,6 +66,9 @@
         <a href="#" class="nav-item" data-page="events">
           <span class="nav-icon">&#9737;</span> События
         </a>
+        <a href="#" class="nav-item" data-page="stats">
+          <span class="nav-icon">&#9202;</span> Статистика
+        </a>
 
         <div class="nav-section-label" style="margin-top:16px">Управление</div>
         <a href="#" class="nav-item" data-page="schedule">
@@ -253,6 +256,42 @@
           <div id="events-loader" class="table-message" style="display:none">Загрузка…</div>
           <div id="no-events" class="table-message" style="display:none">Событий не найдено.</div>
         </div>
+      </div>
+
+      <!-- СТАТИСТИКА -->
+      <div class="page" id="page-stats">
+        <div class="page-header sched-page-header">
+          <div>
+            <h1 class="page-title">СТАТИСТИКА</h1>
+            <p class="page-subtitle">Активность сбора и разбивка по каналам и темам</p>
+          </div>
+          <select id="stats-days" class="filter-select" style="width:auto">
+            <option value="7">7 дней</option>
+            <option value="14">14 дней</option>
+            <option value="30" selected>30 дней</option>
+            <option value="90">90 дней</option>
+          </select>
+        </div>
+
+        <div id="stats-cards" class="stats-cards"></div>
+
+        <div class="stats-section">
+          <h2 class="stats-h2">Посты по дням</h2>
+          <div id="stats-perday" class="stats-daychart"></div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stats-section">
+            <h2 class="stats-h2">По темам</h2>
+            <div id="stats-percat" class="stats-barlist"></div>
+          </div>
+          <div class="stats-section">
+            <h2 class="stats-h2">Топ каналов</h2>
+            <div id="stats-perchan" class="stats-barlist"></div>
+          </div>
+        </div>
+
+        <div id="stats-loader" class="table-message" style="display:none">Загрузка…</div>
       </div>
 
       <!-- РАСПИСАНИЕ -->

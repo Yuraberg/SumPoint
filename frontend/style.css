@@ -1168,3 +1168,153 @@ body {
   margin-right: 6px;
   white-space: nowrap;
 }
+
+/* ── Statistics page ──────────────────────────────────────────────────────── */
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+.stat-card .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.stat-card.accent .stat-value { color: var(--accent); }
+
+.stats-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.stats-h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 820px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* Daily bar chart — flex row of vertical bars. */
+.stats-daychart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 140px;
+}
+.day-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+}
+.day-bar .day-fill {
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: opacity .15s;
+}
+.day-bar:hover .day-fill { opacity: .75; }
+.day-bar .day-tip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--card-bg);
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  margin-bottom: 4px;
+  z-index: 5;
+}
+.day-bar:hover .day-tip { opacity: 1; }
+
+/* Horizontal bar list — category / channel breakdown. */
+.stats-barlist { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.bar-row .bar-name {
+  flex: 0 0 34%;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-row .bar-track {
+  flex: 1 1 auto;
+  background: var(--surface-alt);
+  border-radius: 5px;
+  height: 14px;
+  overflow: hidden;
+}
+.bar-row .bar-fill {
+  background: var(--accent);
+  height: 100%;
+  border-radius: 5px;
+  min-width: 2px;
+}
+.bar-row .bar-count {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* ── Channel health rows ──────────────────────────────────────────────────── */
+.channel-item.health { flex-direction: column; align-items: stretch; gap: 6px; }
+.channel-health-top { display: flex; align-items: center; gap: 10px; }
+.channel-health-top .channel-item-name { flex: 1 1 auto; }
+.ch-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+}
+.ch-dot.ok    { background: var(--green); }
+.ch-dot.stale { background: var(--orange); }
+.ch-dot.err   { background: var(--red); }
+.ch-dot.empty { background: var(--muted); }
+.channel-health-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: 19px;
+}
+.channel-health-meta b { color: var(--text); font-weight: 600; }
+.channel-health-err {
+  font-size: 12px;
+  color: var(--red);
+  padding-left: 19px;
+  word-break: break-word;
+}

@@ -123,3 +123,66 @@ async def test_unread_flow_and_ownership(engine, _create_tables):
         assert await post_repository.mark_all_read(db, 1) == 2
         assert await post_repository.count_unread(db, 1) == 0
         assert await post_repository.count_unread(db, 2) == 1
+
+
+@pytest.mark.integration
+async def test_stats_aggregates_and_ownership(engine, _create_tables):
+    """Statistics repository: totals, per-day, per-category, per-channel and
+    channel_health — all scoped to the owning user."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from app.models.channel import Channel
+    from app.models.post import Post
+    from app.models.user import User
+    from app.repositories import stats_repository
+    from app.utils.time import utcnow
+
+    sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+    async with sessionmaker() as db:
+        db.add_all([User(id=1, first_name="Alice"), User(id=2, first_name="Bob")])
+        await db.flush()
+        db.add_all([
+            Channel(id=10, telegram_id=100, user_id=1, title="News"),
+            Channel(id=11, telegram_id=101, user_id=1, title="Tech"),
+            Channel(id=20, telegram_id=200, user_id=2, title="Bob"),
+        ])
+        await db.flush()
+
+        now = utcnow()
+        # Alice: 2 "news" posts (one unread, one read), 1 "tech" post with events,
+        # plus 1 ad that must be excluded everywhere.
+        db.add_all([
+            Post(channel_id=10, telegram_message_id=1, text="a1", category="news",
+                 published_at=now, is_ad=False),
+            Post(channel_id=10, telegram_message_id=2, text="a2", category="news",
+                 published_at=now, is_ad=False, read_at=now),
+            Post(channel_id=11, telegram_message_id=3, text="a3", category="tech",
+                 published_at=now, is_ad=False, events=[{"name": "x"}]),
+            Post(channel_id=10, telegram_message_id=4, text="ad", category="ad",
+                 published_at=now, is_ad=True),
+            # Bob's post — never counted for Alice.
+            Post(channel_id=20, telegram_message_id=9, text="b", category="news",
+                 published_at=now, is_ad=False),
+        ])
+        await db.commit()
+
+        totals = await stats_repository.totals(db, 1)
+        assert totals == {"posts": 3, "unread": 2, "events": 1, "channels": 2}
+
+        per_cat = await stats_repository.posts_per_category(db, 1)
+        assert {r["category"]: r["count"] for r in per_cat} == {"news": 2, "tech": 1}
+
+        per_chan = {r["title"]: r["count"]
+                    for r in await stats_repository.posts_per_channel(db, 1)}
+        assert per_chan == {"News": 2, "Tech": 1}
+
+        per_day = await stats_repository.posts_per_day(db, 1, days=7)
+        assert len(per_day) == 7  # zero-filled
+        assert sum(r["count"] for r in per_day) == 3
+
+        health = {h["title"]: h
+                  for h in await stats_repository.channel_health(db, 1)}
+        assert health["News"]["post_count"] == 2
+        assert health["News"]["unread_count"] == 1
+        assert health["Tech"]["post_count"] == 1
+        assert "Bob" not in health  # ownership scoping
