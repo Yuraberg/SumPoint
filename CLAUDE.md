@@ -194,11 +194,11 @@ Backups are stored in `./backups/` by default (override with `BACKUP_DIR`).
 |---|------|--------|-------|
 | 1A | `.env.example` — все переменные с подсказками | ✅ | `.env.example` |
 | 2A | HEALTHCHECK + `/api/v1/health` (DB + Redis) | ✅ | `Dockerfile`, `app/api/health.py`, `app/api/router.py` |
-| 3A | `ruff` + `pip-audit` в CI | ✅ | `.github/workflows/deploy.yml`, `pyproject.toml` |
+| 3A | `ruff` + `pip-audit` в CI | ⚠️→✅ | `.github/workflows/deploy.yml`, `pyproject.toml`. Гейт был добавлен, но не проходил: 71 ошибка ruff (в основном ложные F821 на forward-ref в SQLAlchemy-моделях) и 20 CVE в зависимостях. Исправлено отдельным коммитом (`6248597`) — заменён `python-jose`→`PyJWT`, обновлены `fastapi`/`starlette`/`cryptography`/`pytest`. `pip-audit` теперь 0 уязвимостей |
 | 4A | CORS — warning о localhost в проде | ✅ | `app/main.py` |
-| 4Б | Rate limit на `/auth/*` (slowapi) | ✅ | Уже был, без изменений |
+| 4Б | Rate limit на `/auth/*` (slowapi) | ⚠️→✅ | Был и раньше, но брал первый IP из `X-Forwarded-For` — Caddy добавляет свой IP в конец, а не заменяет заголовок, так что первый элемент подконтролен атакующему (обход лимита ротацией фейкового IP). Исправлено на последний элемент (`874ed8d`) |
 | 5A | Uptime Kuma — 3 монитора + алерты | ✅ | `CLAUDE.md` (документация) |
-| 6В | `LOG_LEVEL` + глушение шумных библиотек | ✅ | `app/config.py`, `app/main.py` |
+| 6В | `LOG_LEVEL` + глушение шумных библиотек | ⚠️→✅ | `app/config.py`, `app/main.py`. Закрывало утечку токена бота в логи только в `api`-процессе; `worker`/`beat` (Celery, где реально шлются все дайджесты/алерты через httpx) остались незащищены. Добавлено то же подавление в `app/tasks/celery_app.py` (`6248597`) |
 | 7А | `pg_dump` бэкап + cron (7 дней) | ✅ | `scripts/backup-db.sh`, `CLAUDE.md` |
 
 ### Вторая волна («Позже»)
@@ -206,9 +206,11 @@ Backups are stored in `./backups/` by default (override with `BACKUP_DIR`).
 | # | Этап | Статус | Файлы |
 |---|------|--------|-------|
 | 1Б | Pre-commit `detect-secrets` | ✅ | `.pre-commit-config.yaml`, `.secrets.baseline` |
-| 2Б | `docker-compose.yml` (dev) + `.prod.yml` | ✅ | `docker-compose.yml`, `docker-compose.prod.yml`, CI |
-| 3Б | Интеграционные тесты с pgvector в CI | ✅ | `tests/integration/`, CI job |
+| 2Б | `docker-compose.yml` (dev) + `.prod.yml` | ⚠️→✅ | `docker-compose.yml`, `docker-compose.prod.yml`, CI. `docker compose config` фатально падал — сервис `bot` отсутствовал в базовом файле, на который ссылался prod-оверлей; dev-режим (`docker compose up -d`) был сломан ссылкой на необъявленную сеть `coolify`; `deploy.yml` вызывал несуществующие имена сервисов (`sumpoint-api` вместо `api`). Исправлено (`63e8623`) |
+| 3Б | Интеграционные тесты с pgvector в CI | ⚠️→✅ | `tests/integration/`, CI job. Все 4 теста падали с `ScopeMismatch` при каждом запуске (session-scoped фикстура зависела от function-scoped event loop). Исправлено (`6248597`), заодно найден и исправлен реальный баг: `get_or_create` не обновлял `first_name` у существующих пользователей |
 | 5Б | Sentry (опционально по `SENTRY_DSN`) | ✅ | `requirements.txt`, `app/config.py`, `app/main.py` |
 | 6А | JSON-логи в проде | ✅ | `app/logging.py`, `app/main.py` |
 
-**Итого: 13/13 этапов выполнено**
+**Итого: 13/13 этапов добавлено, из них 5 не проходили проверку и были доисправлены отдельными коммитами на `main` — см. таблицу.**
+
+CI теперь также гейтит сами PR (`pull_request`-триггер добавлен в `deploy.yml`, `54f6c38`) — раньше ruff/pip-audit/pytest запускались только после мержа в `main`, так что PR мог влиться с падающими проверками без единого красного крестика.
