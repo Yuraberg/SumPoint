@@ -363,6 +363,23 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("mark-all-read-btn").addEventListener("click", markAllRead);
 
+  const exportBtn = document.getElementById("export-btn");
+  if (exportBtn) exportBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const menu = document.getElementById("export-menu");
+    menu.style.display = menu.style.display === "none" ? "block" : "none";
+  });
+  document.querySelectorAll("#export-menu button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.getElementById("export-menu").style.display = "none";
+      exportPosts(b.dataset.format);
+    });
+  });
+  document.addEventListener("click", () => {
+    const menu = document.getElementById("export-menu");
+    if (menu) menu.style.display = "none";
+  });
+
   // Theme toggle
   applyThemeButton();
   document.getElementById("theme-btn").addEventListener("click", toggleTheme);
@@ -485,6 +502,33 @@ function buildFeedUrl(offset) {
   if (filters.dateTo) url += `&date_to=${filters.dateTo}`;
   if (filters.unreadOnly) url += `&unread_only=true`;
   return url;
+}
+
+async function exportPosts(format) {
+  let url = `/posts/export?format=${format}`;
+  if (filters.category) url += `&category=${encodeURIComponent(filters.category)}`;
+  if (filters.channelId) url += `&channel_id=${filters.channelId}`;
+  if (filters.dateFrom) url += `&date_from=${filters.dateFrom}`;
+  if (filters.dateTo) url += `&date_to=${filters.dateTo}`;
+  if (filters.unreadOnly) url += `&unread_only=true`;
+  try {
+    // Can't use a plain <a href> — the download needs the Bearer token.
+    const resp = await fetch(API + url, { headers: authHeaders() });
+    if (resp.status === 401) { logout(); return; }
+    if (!resp.ok) throw new Error(await resp.text());
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = `sumpoint-posts.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objUrl);
+    toast(`Экспорт (${format.toUpperCase()}) готов`, "success");
+  } catch (e) {
+    toast("Ошибка экспорта: " + e.message, "error");
+  }
 }
 
 function showSkeletons(n = 6) {
@@ -1223,10 +1267,17 @@ async function loadChannels() {
       const errBlock = ch.last_error
         ? `<div class="channel-health-err" title="${escHtml(ch.last_error)}">⚠ ${escHtml(ch.last_error)}</div>`
         : "";
+      const offBadge = ch.is_active === false
+        ? `<span class="ch-off-badge">выключен</span>` : "";
+      const toggleBtn = ch.is_active === false
+        ? `<button class="btn-ghost-sm ch-toggle" onclick="toggleChannel(${ch.channel_id})">Включить</button>`
+        : `<button class="btn-ghost-sm ch-toggle" onclick="toggleChannel(${ch.channel_id})">Выключить</button>`;
       li.innerHTML = `
         <div class="channel-health-top">
           <span class="ch-dot ${state}" title="${state}"></span>
           <span class="channel-item-name">${escHtml(ch.title || ch.username || String(ch.channel_id))}</span>
+          ${offBadge}
+          ${toggleBtn}
           <button class="channel-remove" onclick="removeChannel(${ch.channel_id})">✕</button>
         </div>
         <div class="channel-health-meta">
@@ -1259,6 +1310,16 @@ async function addChannel() {
     loadChannelsDropdown();
   } catch (e) {
     toast("Ошибка добавления: " + e.message, "error");
+  }
+}
+
+async function toggleChannel(id) {
+  try {
+    await apiFetch(`/channels/${id}/toggle`, { method: "POST" });
+    loadChannels();
+    loadChannelsDropdown();
+  } catch (e) {
+    toast("Не удалось переключить канал: " + e.message, "error");
   }
 }
 

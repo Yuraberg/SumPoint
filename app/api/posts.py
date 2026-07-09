@@ -1,7 +1,11 @@
 """Post retrieval and semantic search endpoints."""
+import csv
+import io
+import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +72,71 @@ async def list_posts(
                      cluster_size=row.cluster_size)
         for row in rows
     ]
+
+
+EXPORT_LIMIT = 5000
+_EXPORT_COLUMNS = [
+    "id", "published_at", "channel_title", "channel_username",
+    "category", "is_read", "cluster_size", "summary", "text", "telegram_url",
+]
+
+
+def _export_record(row) -> dict:
+    post = row.Post
+    username = row.channel_username
+    return {
+        "id": post.id,
+        "published_at": post.published_at.isoformat() if post.published_at else "",
+        "channel_title": row.channel_title or "",
+        "channel_username": username or "",
+        "category": post.category or "",
+        "is_read": getattr(post, "read_at", None) is not None,
+        "cluster_size": max(getattr(row, "cluster_size", 1) or 1, 1),
+        "summary": post.summary or "",
+        "text": post.text or "",
+        "telegram_url": f"https://t.me/{username}/{post.telegram_message_id}" if username else "",
+    }
+
+
+@router.get("/export")
+@limiter.limit("10/minute")
+async def export_posts(
+    request: Request,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    category: str | None = Query(None),
+    channel_id: int | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    unread_only: bool = Query(False),
+):
+    """Download the (filtered) feed as CSV or JSON. Uses the same filters as the
+    posts feed; capped at EXPORT_LIMIT rows, newest first."""
+    rows = await post_repository.list_for_user(
+        db, current_user.id,
+        category=category, channel_id=channel_id,
+        date_from=date_from, date_to=date_to, unread_only=unread_only,
+        limit=EXPORT_LIMIT, offset=0,
+    )
+    records = [_export_record(r) for r in rows]
+
+    if format == "json":
+        body = json.dumps(records, ensure_ascii=False, indent=2)
+        media, ext = "application/json", "json"
+    else:
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=_EXPORT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(records)
+        body = buf.getvalue()
+        media, ext = "text/csv", "csv"
+
+    return Response(
+        content=body,
+        media_type=f"{media}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="sumpoint-posts.{ext}"'},
+    )
 
 
 @router.get("/unread-count")

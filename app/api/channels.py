@@ -55,6 +55,21 @@ async def add_channel(body: ChannelCreate, current_user: CurrentUser, db: AsyncS
     return ch
 
 
+@router.post("/{channel_id}/toggle", response_model=ChannelOut)
+async def toggle_channel(channel_id: int, current_user: CurrentUser, db: AsyncSession = Depends(get_db)):
+    """Enable/disable a channel. Re-enabling clears the failure counter and last
+    error so an auto-deactivated channel gets a clean retry on the next tick."""
+    ch = await channel_repository.get_owned(db, channel_id, current_user.id)
+    if not ch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+    ch.is_active = not ch.is_active
+    if ch.is_active:
+        ch.error_count = 0
+        ch.last_error = None
+    await db.flush()
+    return ch
+
+
 @router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_channel(channel_id: int, current_user: CurrentUser, db: AsyncSession = Depends(get_db)):
     ch = await channel_repository.get_owned(db, channel_id, current_user.id)

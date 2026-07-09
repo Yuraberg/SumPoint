@@ -9,6 +9,7 @@ from telethon.errors import FloodWaitError
 
 from app.config import get_settings
 from app.constants import (
+    AUTO_DEACTIVATE_AFTER_FAILURES,
     CHANNEL_BATCH_DELAY,
     CHANNEL_BATCH_SIZE,
     CHANNEL_FETCH_DELAY,
@@ -137,10 +138,23 @@ async def _fetch_user_channels(
                     channel.title, channel.telegram_id, str(e)[:200],
                 )
                 await _safe_rollback(db)
-                channel_repository.mark_fetched(channel, utcnow(), error=str(e))
+                channel_repository.mark_fetched(
+                    channel, utcnow(), error=str(e), count_failure=True
+                )
+                # Too many consecutive failures → a permanently-broken channel
+                # (deleted/renamed, or a stale session). Deactivate so we stop
+                # spending Telethon calls on it; the user can re-enable it later.
+                deactivated = False
+                if channel.error_count >= AUTO_DEACTIVATE_AFTER_FAILURES and channel.is_active:
+                    channel.is_active = False
+                    deactivated = True
+                    logger.warning(
+                        "Auto-deactivated channel %s (%s) after %d consecutive failures",
+                        channel.title, channel.telegram_id, channel.error_count,
+                    )
                 await _safe_commit(db)
-                if was_healthy and user.chat_id:
-                    await _notify_channel_failure(user, channel, e)
+                if user.chat_id and (deactivated or was_healthy):
+                    await _notify_channel_failure(user, channel, e, deactivated=deactivated)
 
             channel_index += 1
             if channel_index % CHANNEL_BATCH_SIZE == 0:
@@ -253,13 +267,21 @@ async def _notify_keyword_alerts(db, channel: Channel, post: Post) -> None:
         logger.warning("Failed to send keyword alert notification to user %s", user.id)
 
 
-async def _notify_channel_failure(user: User, channel: Channel, error: Exception) -> None:
+async def _notify_channel_failure(
+    user: User, channel: Channel, error: Exception, *, deactivated: bool = False
+) -> None:
+    if deactivated:
+        text = (
+            f"🚫 Канал «{channel.title}» отключён после {channel.error_count} "
+            f"неудачных попыток подряд: {str(error)[:160]}\n"
+            "Проверьте, что канал существует и Telethon-сессия актуальна, "
+            "затем включите его снова на странице «Каналы»."
+        )
+    else:
+        text = f"⚠️ Канал «{channel.title}» перестал обновляться: {str(error)[:200]}"
     try:
         async with get_bot() as bot:
-            await bot.send_message(
-                chat_id=user.chat_id,
-                text=f"⚠️ Канал «{channel.title}» перестал обновляться: {str(error)[:200]}",
-            )
+            await bot.send_message(chat_id=user.chat_id, text=text)
     except Exception:
         logger.warning(
             "Failed to notify user %s about channel %s failure", user.id, channel.id

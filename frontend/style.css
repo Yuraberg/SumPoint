@@ -1442,3 +1442,42 @@ body {
   border-top: 1px solid var(--border);
 }
 .chat-input { flex: 1 1 auto; }
+
+/* ── Channel enable/disable ─────────────────────────────────────────────────── */
+.ch-off-badge {
+  font-size: 11px;
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 4px;
+  padding: 0 6px;
+  flex: 0 0 auto;
+}
+.ch-toggle { flex: 0 0 auto; height: 26px; padding: 0 10px; }
+
+/* ── Posts export ───────────────────────────────────────────────────────────── */
+.export-wrap { position: relative; display: inline-block; }
+.export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  z-index: 20;
+  overflow: hidden;
+  min-width: 120px;
+}
+.export-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.export-menu button:hover { background: var(--surface-alt); }

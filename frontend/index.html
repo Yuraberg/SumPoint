@@ -152,6 +152,16 @@
             <label>&nbsp;</label>
             <button id="mark-all-read-btn" class="btn-ghost-sm" style="height:34px">Прочитать всё</button>
           </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <div class="export-wrap">
+              <button id="export-btn" class="btn-ghost-sm" style="height:34px">Экспорт ▾</button>
+              <div id="export-menu" class="export-menu" style="display:none">
+                <button data-format="csv">CSV</button>
+                <button data-format="json">JSON</button>
+              </div>
+            </div>
+          </div>
           <div class="filter-search">
             <input type="text" id="search-input" placeholder="Поиск..." class="filter-input search-input" />
             <button id="search-btn" class="btn-search">Найти</button>

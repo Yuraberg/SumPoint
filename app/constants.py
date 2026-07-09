@@ -40,6 +40,12 @@ CHANNEL_BATCH_DELAY = 8.0   # seconds between batches
 FETCH_LOCK_KEY = "sumpoint:fetch_lock"
 FETCH_LOCK_TTL = 600        # safety net if a worker dies mid-run, in seconds
 
+# After this many consecutive real fetch failures (not transient flood waits),
+# a channel is auto-deactivated so the worker stops spending Telethon calls on a
+# permanently-broken source (deleted/renamed channel, stale session). The user
+# is notified once and can re-enable it after fixing the cause.
+AUTO_DEACTIVATE_AFTER_FAILURES = 10
+
 # Per-channel history window pulled from Telethon on each fetch tick.
 FETCH_HISTORY_HOURS = 24
 # Max messages pulled per channel per tick (Telethon iter_messages limit).

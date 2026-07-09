@@ -64,7 +64,24 @@ async def get_fetch_batch(
     return (await db.execute(stmt)).all()
 
 
-def mark_fetched(channel: Channel, when: datetime, *, error: str | None = None) -> None:
-    """Update fetch bookkeeping on a channel (caller commits)."""
+def mark_fetched(
+    channel: Channel,
+    when: datetime,
+    *,
+    error: str | None = None,
+    count_failure: bool = False,
+) -> None:
+    """Update fetch bookkeeping on a channel (caller commits).
+
+    A successful fetch (``error=None``) clears the error and resets the
+    consecutive-failure counter. A real error with ``count_failure=True``
+    increments it (used to auto-deactivate permanently-broken channels).
+    Transient errors like flood waits pass ``count_failure=False`` so they
+    don't push a healthy channel toward deactivation.
+    """
     channel.last_fetched_at = when
     channel.last_error = error[:1000] if error else None
+    if error is None:
+        channel.error_count = 0
+    elif count_failure:
+        channel.error_count = (channel.error_count or 0) + 1
