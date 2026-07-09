@@ -5,6 +5,69 @@ let token = localStorage.getItem("sp_token") || null;
 let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
 
 let filters = { dateFrom: "", dateTo: "", category: "", channelId: "" };
+let density = localStorage.getItem("sp_density") || "medium";
+let lastPosts = [];
+
+// ── Resizable table columns ──────────────────────────────────────────────────
+// Drags the header cell's own width (table-layout:fixed takes column widths
+// from the header row), persisted per-table in localStorage so it survives
+// a reload.
+function initResizableColumns(tableId, storageKey) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const ths = Array.from(table.querySelectorAll("thead th[data-col]"));
+  if (!ths.length) return;
+
+  const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+  ths.forEach(th => {
+    const w = saved[th.dataset.col];
+    if (w) th.style.width = w + "px";
+  });
+
+  ths.forEach((th, i) => {
+    if (i === ths.length - 1) return; // no handle on the last column
+    const handle = document.createElement("div");
+    handle.className = "col-resize-handle";
+    th.appendChild(handle);
+
+    let startX = 0;
+    let startWidth = 0;
+
+    function onMouseMove(e) {
+      const delta = e.clientX - startX;
+      th.style.width = Math.max(40, startWidth + delta) + "px";
+    }
+    function onMouseUp() {
+      handle.classList.remove("active");
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      const widths = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      widths[th.dataset.col] = th.offsetWidth;
+      localStorage.setItem(storageKey, JSON.stringify(widths));
+    }
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      handle.classList.add("active");
+      startX = e.clientX;
+      startWidth = th.offsetWidth;
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  });
+}
+
+// ── Row density (Кратко / Средне / Расширенно) ───────────────────────────────
+function setDensity(d) {
+  density = d;
+  localStorage.setItem("sp_density", d);
+  document.querySelectorAll(".density-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.density === d);
+  });
+  const container = document.getElementById("posts-table-container");
+  if (container) container.dataset.density = d;
+  renderPosts(lastPosts);
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -195,6 +258,19 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("import-btn").addEventListener("click", importChannels);
   document.getElementById("sync-btn").addEventListener("click", syncChannels);
+
+  // Row density toggle — reflect the saved preference and wire up clicks.
+  document.querySelectorAll(".density-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.density === density);
+    btn.addEventListener("click", () => setDensity(btn.dataset.density));
+  });
+  const postsContainer = document.getElementById("posts-table-container");
+  if (postsContainer) postsContainer.dataset.density = density;
+
+  // Resizable columns — header rows are static, so this only needs to run once.
+  initResizableColumns("posts-table", "sp_col_widths_posts");
+  initResizableColumns("events-table", "sp_col_widths_events");
+  initResizableColumns("sched-table", "sp_col_widths_sched");
 });
 
 // ── Public config (bot username, base URL) ─────────────────────────────────────
@@ -296,19 +372,26 @@ async function loadFeed(overrideRows = null) {
       data = await apiFetch(url);
     }
     loader.style.display = "none";
+    lastPosts = data || [];
     if (!data || data.length === 0) {
       noPostsEl.style.display = "block";
       return;
     }
-    data.forEach(post => {
-      const { mainRow, detailRow } = renderPostRow(post);
-      tbody.appendChild(mainRow);
-      tbody.appendChild(detailRow);
-    });
+    renderPosts(data);
   } catch (e) {
     loader.style.display = "none";
     tbody.innerHTML = `<tr><td colspan="5" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
   }
+}
+
+function renderPosts(data) {
+  const tbody = document.getElementById("posts-tbody");
+  tbody.innerHTML = "";
+  data.forEach(post => {
+    const { mainRow, detailRow } = renderPostRow(post);
+    tbody.appendChild(mainRow);
+    tbody.appendChild(detailRow);
+  });
 }
 
 function renderPostRow(post) {
@@ -316,7 +399,8 @@ function renderPostRow(post) {
   const channelName = (post.channel_title || post.channel_username || "—");
   const channelShort = channelName.length > 24 ? channelName.slice(0, 22) + "…" : channelName;
   const rawText = (post.text || "").replace(/\*\*/g, "").replace(/\n/g, " ").trim();
-  const preview = rawText.length > 130 ? rawText.slice(0, 128) + "…" : rawText;
+  const previewLen = density === "compact" ? 70 : density === "expanded" ? 400 : 130;
+  const preview = rawText.length > previewLen ? rawText.slice(0, previewLen - 2) + "…" : rawText;
 
   const simBadge = post.similarity != null
   ? `<span class="sim-badge">${Math.round((1 - post.similarity) * 100)}%</span>`
@@ -359,6 +443,11 @@ function renderPostRow(post) {
   const linkBlock = safeTgLink ? `<a class="detail-link" href="${escHtml(safeTgLink)}" target="_blank" rel="noopener">→ Открыть в Telegram</a>` : "";
 
   detailRow.innerHTML = `<td colspan="5"><div class="detail-inner">${summaryBlock}${originalBlock}${linkBlock}</div></td>`;
+
+  if (density === "expanded") {
+    mainRow.classList.add("expanded");
+    detailRow.classList.add("visible");
+  }
 
   mainRow.addEventListener("click", () => {
     const open = detailRow.classList.contains("visible");

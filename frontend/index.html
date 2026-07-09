@@ -120,21 +120,29 @@
               <option value="">Все каналы</option>
             </select>
           </div>
+          <div class="filter-group">
+            <label>ВИД</label>
+            <div class="density-toggle" id="density-toggle">
+              <button class="density-btn" data-density="compact">Кратко</button>
+              <button class="density-btn active" data-density="medium">Средне</button>
+              <button class="density-btn" data-density="expanded">Расширенно</button>
+            </div>
+          </div>
           <div class="filter-search">
             <input type="text" id="search-input" placeholder="Поиск..." class="filter-input search-input" />
             <button id="search-btn" class="btn-search">Найти</button>
           </div>
         </div>
 
-        <div class="table-container">
-          <table class="posts-table">
+        <div class="table-container" id="posts-table-container" data-density="medium">
+          <table class="posts-table" id="posts-table">
             <thead>
               <tr>
-                <th class="col-channel">КАНАЛ</th>
-                <th class="col-dots">О</th>
-                <th class="col-post">ПОСТ</th>
-                <th class="col-topics">ТЕМЫ</th>
-                <th class="col-date"></th>
+                <th class="col-channel" data-col="channel">КАНАЛ</th>
+                <th class="col-dots" data-col="dots">О</th>
+                <th class="col-post" data-col="post">ПОСТ</th>
+                <th class="col-topics" data-col="topics">ТЕМЫ</th>
+                <th class="col-date" data-col="date">ДАТА</th>
               </tr>
             </thead>
             <tbody id="posts-tbody"></tbody>
@@ -202,17 +210,17 @@
         </div>
 
         <div class="table-container">
-          <table class="events-table">
+          <table class="events-table" id="events-table">
             <thead>
               <tr>
-                <th class="evcol-date">ДАТА</th>
-                <th class="evcol-name">НАЗВАНИЕ</th>
-                <th class="evcol-topics">ТЕМЫ</th>
-                <th class="evcol-type">ТИП</th>
-                <th class="evcol-location">МЕСТО</th>
-                <th class="evcol-speakers">СПИКЕРЫ</th>
-                <th class="evcol-partners">ПАРТНЁРЫ</th>
-                <th class="evcol-mentions">УПОМИНАНИЯ</th>
+                <th class="evcol-date" data-col="date">ДАТА</th>
+                <th class="evcol-name" data-col="name">НАЗВАНИЕ</th>
+                <th class="evcol-topics" data-col="topics">ТЕМЫ</th>
+                <th class="evcol-type" data-col="type">ТИП</th>
+                <th class="evcol-location" data-col="location">МЕСТО</th>
+                <th class="evcol-speakers" data-col="speakers">СПИКЕРЫ</th>
+                <th class="evcol-partners" data-col="partners">ПАРТНЁРЫ</th>
+                <th class="evcol-mentions" data-col="mentions">УПОМИНАНИЯ</th>
               </tr>
             </thead>
             <tbody id="events-tbody"></tbody>
@@ -233,16 +241,16 @@
         </div>
 
         <div class="table-container">
-          <table class="posts-table sched-table">
+          <table class="posts-table sched-table" id="sched-table">
             <thead>
               <tr>
-                <th class="scol-name">НАЗВАНИЕ</th>
-                <th class="scol-type">ТИПЫ</th>
-                <th class="scol-cron">РАСПИСАНИЕ</th>
-                <th class="scol-topics">ТЕМЫ</th>
-                <th class="scol-status">СТАТУС</th>
-                <th class="scol-last">ПОСЛЕДНИЙ ЗАПУСК</th>
-                <th class="scol-act"></th>
+                <th class="scol-name" data-col="name">НАЗВАНИЕ</th>
+                <th class="scol-type" data-col="type">ТИПЫ</th>
+                <th class="scol-cron" data-col="cron">РАСПИСАНИЕ</th>
+                <th class="scol-topics" data-col="topics">ТЕМЫ</th>
+                <th class="scol-status" data-col="status">СТАТУС</th>
+                <th class="scol-last" data-col="last">ПОСЛЕДНИЙ ЗАПУСК</th>
+                <th class="scol-act" data-col="act"></th>
               </tr>
             </thead>
             <tbody id="sched-tbody"></tbody>
