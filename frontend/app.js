@@ -1,7 +1,10 @@
 /* ── SumPoint frontend ───────────────────────────────────────────────────────── */
 
 const API = "/api/v1";
-let token = localStorage.getItem("sp_token") || null;
+// The JWT now lives in an HttpOnly cookie the browser sends automatically — it
+// is intentionally NOT readable from JS (XSS can't steal it). currentUser is
+// populated from /auth/me once the cookie is known good.
+let currentUser = null;
 let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
 
 let filters = { dateFrom: "", dateTo: "", category: "", channelId: "", unreadOnly: false };
@@ -166,26 +169,32 @@ function setDensity(d) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-
-function setToken(t) {
-  token = t;
-  localStorage.setItem("sp_token", t);
-}
-
-function clearToken() {
-  token = null;
-  localStorage.removeItem("sp_token");
-}
+// credentials:"include" makes the browser send the HttpOnly session cookie with
+// every API call. No Authorization header, no token in JS.
 
 function authHeaders() {
-  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 async function apiFetch(path, opts = {}) {
-  const resp = await fetch(API + path, { ...opts, headers: { ...authHeaders(), ...(opts.headers || {}) } });
-  if (resp.status === 401) { logout(); return null; }
+  const resp = await fetch(API + path, {
+    credentials: "include",
+    ...opts,
+    headers: { ...authHeaders(), ...(opts.headers || {}) },
+  });
+  if (resp.status === 401) { onUnauthed(); return null; }
   if (!resp.ok) throw new Error(await resp.text());
   return resp.json();
+}
+
+// A 401 mid-session means the cookie expired or was revoked — drop to login
+// instead of a reload loop.
+function onUnauthed() {
+  currentUser = null;
+  const app = document.getElementById("app");
+  const login = document.getElementById("login-screen");
+  if (app) app.style.display = "none";
+  if (login) login.style.display = "flex";
 }
 
 // ── Mini App auto-login ──────────────────────────────────────────────────────
@@ -195,6 +204,7 @@ async function tryMiniAppLogin() {
   try {
     const resp = await fetch(`${API}/auth/telegram/miniapp`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ init_data: window.Telegram.WebApp.initData }),
     });
@@ -202,9 +212,7 @@ async function tryMiniAppLogin() {
       console.error("MiniApp auth failed:", await resp.text());
       return false;
     }
-    const { access_token } = await resp.json();
-    setToken(access_token);
-    return true;
+    return true;  // cookie is set; caller confirms via /auth/me
   } catch (e) {
     console.error("MiniApp auth error:", e);
     return false;
@@ -217,23 +225,36 @@ async function tryMagicLinkVerify() {
   const params = new URLSearchParams(window.location.search);
   const magicToken = params.get("token");
   if (!magicToken) return false;
-  
-  // Clean URL
+
+  // Clean URL so the one-time token isn't left in history.
   window.history.replaceState({}, "", "/");
-  
+
   try {
-    const resp = await fetch(`${API}/auth/telegram/magic-link/verify?token=${encodeURIComponent(magicToken)}`);
+    const resp = await fetch(
+      `${API}/auth/telegram/magic-link/verify?token=${encodeURIComponent(magicToken)}`,
+      { credentials: "include" },
+    );
     if (!resp.ok) {
       const err = await resp.json();
       toast(err.detail || "Ссылка недействительна", "error");
       return false;
     }
-    const { access_token } = await resp.json();
-    setToken(access_token);
-    return true;
+    return true;  // cookie is set
   } catch (e) {
     toast("Ошибка входа: " + e.message, "error");
     return false;
+  }
+}
+
+// Confirm the session cookie is valid and load the current user.
+async function fetchMe() {
+  try {
+    const resp = await fetch(`${API}/auth/me`, { credentials: "include" });
+    if (!resp.ok) return null;
+    currentUser = await resp.json();
+    return currentUser;
+  } catch {
+    return null;
   }
 }
 
@@ -324,27 +345,20 @@ async function requestMagicLink() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function boot() {
-  // Magic Link from URL
+  // Magic Link from URL — sets the session cookie.
   const params = new URLSearchParams(window.location.search);
   if (params.get("token")) {
-    const ok = await tryMagicLinkVerify();
-    if (ok) {
-      showApp();
-      return;
-    }
+    if (await tryMagicLinkVerify() && await fetchMe()) { showApp(); return; }
   }
-  
-  // Mini App: auto-login via initData
+
+  // Mini App: auto-login via initData — sets the session cookie.
   if (isMiniApp) {
-    const ok = await tryMiniAppLogin();
-    if (ok) {
-      showApp();
-      return;
-    }
+    if (await tryMiniAppLogin() && await fetchMe()) { showApp(); return; }
     // Fall through to widget if MiniApp auth fails
   }
 
-  if (token) {
+  // Otherwise: do we already have a valid session cookie?
+  if (await fetchMe()) {
     showApp();
   } else {
     document.getElementById("login-screen").style.display = "flex";
@@ -495,13 +509,18 @@ async function loadPublicConfig() {
 function showApp() {
   document.getElementById("login-screen").style.display = "none";
   document.getElementById("app").style.display = "flex";
+  const nameEl = document.getElementById("sidebar-user");
+  if (nameEl && currentUser) nameEl.textContent = currentUser.first_name || "";
   loadChannelsDropdown();
   refreshUnreadCount();
   navigate("posts");
 }
 
-function logout() {
-  clearToken();
+async function logout() {
+  try {
+    await fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
+  } catch { /* clear locally regardless */ }
+  currentUser = null;
   location.reload();
 }
 
@@ -530,13 +549,12 @@ async function onTelegramAuth(data) {
   try {
     const resp = await fetch(`${API}/auth/telegram`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
     if (!resp.ok) throw new Error("Auth failed");
-    const { access_token } = await resp.json();
-    setToken(access_token);
-    location.reload();
+    location.reload();  // session cookie is set; boot() → /auth/me → app
   } catch (e) {
     toast("Ошибка входа: " + e.message, "error");
   }
@@ -563,7 +581,7 @@ async function exportPosts(format) {
   if (filters.unreadOnly) url += `&unread_only=true`;
   try {
     // Can't use a plain <a href> — the download needs the Bearer token.
-    const resp = await fetch(API + url, { headers: authHeaders() });
+    const resp = await fetch(API + url, { credentials: "include", headers: authHeaders() });
     if (resp.status === 401) { logout(); return; }
     if (!resp.ok) throw new Error(await resp.text());
     const blob = await resp.blob();
@@ -1374,7 +1392,7 @@ async function toggleChannel(id) {
 
 async function removeChannel(id) {
   try {
-    const resp = await fetch(`${API}/channels/${id}`, { method: "DELETE", headers: authHeaders() });
+    const resp = await fetch(`${API}/channels/${id}`, { method: "DELETE", credentials: "include", headers: authHeaders() });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadChannels();
     loadChannelsDropdown();
@@ -1499,7 +1517,7 @@ async function toggleSchedule(id, btn) {
 async function deleteSchedule(id) {
   if (!confirm("Удалить расписание?")) return;
   try {
-    const resp = await fetch(`${API}/schedule/${id}`, { method: "DELETE", headers: authHeaders() });
+    const resp = await fetch(`${API}/schedule/${id}`, { method: "DELETE", credentials: "include", headers: authHeaders() });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadSchedule();
   } catch (e) {

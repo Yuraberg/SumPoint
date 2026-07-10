@@ -10,33 +10,47 @@
 </head>
 <body>
 
-  <!-- Login (Widget — fallback for non-Mini-App) -->
+  <!-- Login -->
   <section id="login-screen" class="login-screen" style="display:none">
     <div class="login-card">
-      <div class="login-logo">SumPoint</div>
-      <h1>Умный дайджест Telegram</h1>
-      <p>Войдите через Telegram, чтобы начать</p>
+      <div class="login-brand">
+        <span class="login-mark">S</span>
+        <span class="login-wordmark">SumPoint</span>
+      </div>
 
-      <!-- Magic Link form (works without oauth.telegram.org) -->
-      <div class="magic-link-section">
-        <p class="magic-link-hint">
-          Напишите <code>/start</code> боту
-          <a id="bot-link" href="#" target="_blank">@<span id="bot-username"></span></a>,
-          затем введите ваш username:
-        </p>
-        <div class="magic-link-row">
-          <span class="magic-at">@</span>
-          <input id="magic-username" type="text" placeholder="username" class="magic-input" />
-          <button id="magic-btn" class="btn-magic">
-            Получить ссылку
-          </button>
-        </div>
-        <div id="magic-status" class="magic-status"></div>
+      <div class="login-head">
+        <h1>Ваши Telegram-каналы — в одной умной ленте</h1>
+        <p>ИИ-сводки, семантический поиск и дайджесты. Войдите через Telegram, чтобы начать.</p>
       </div>
 
       <!-- Telegram Login Widget (requires oauth.telegram.org) -->
-      <div class="widget-divider"><span>или</span></div>
-      <div id="telegram-widget-container"></div>
+      <div id="telegram-widget-container" class="login-widget"></div>
+
+      <div class="login-divider"><span>или по ссылке</span></div>
+
+      <!-- Magic Link form (works without oauth.telegram.org) -->
+      <div class="magic-link-section">
+        <label class="magic-label" for="magic-username">Вход по ссылке через бота</label>
+        <div class="magic-link-row">
+          <span class="magic-at">@</span>
+          <input id="magic-username" type="text" placeholder="username" class="magic-input" autocomplete="off" />
+        </div>
+        <button id="magic-btn" class="btn-magic">Получить ссылку в Telegram</button>
+        <p class="magic-link-hint">
+          Сначала напишите <code>/start</code> боту
+          <a id="bot-link" href="#" target="_blank" rel="noopener">@<span id="bot-username"></span></a>
+          — затем пришлём одноразовую ссылку для входа.
+        </p>
+        <div id="magic-status" class="magic-status"></div>
+      </div>
+
+      <div class="login-foot">
+        <span>Вход защищён подписью Telegram.</span>
+        <span class="login-credit">
+          Сделано автором канала
+          <a href="https://t.me/procpoint" target="_blank" rel="noopener">Точка закупки</a>
+        </span>
+      </div>
     </div>
   </section>
 
@@ -79,6 +93,9 @@
         <div id="sidebar-user" class="sidebar-user"></div>
         <button id="theme-btn" class="sidebar-theme">🌙 Тёмная тема</button>
         <button id="logout-btn" class="sidebar-logout">Выйти</button>
+        <a class="sidebar-credit" href="https://t.me/procpoint" target="_blank" rel="noopener">
+          Автор — «Точка закупки» ↗
+        </a>
       </div>
     </aside>
 

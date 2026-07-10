@@ -13,7 +13,7 @@ from typing import Annotated
 from urllib.parse import parse_qs
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
@@ -39,6 +39,30 @@ from app.utils.time import utcnow
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 _bearer = HTTPBearer(auto_error=False)
+
+# Session cookie holding the JWT. HttpOnly so JavaScript (and therefore an
+# injected XSS payload) can never read it — the token is no longer kept in
+# localStorage. SameSite=Lax means the browser won't attach it to cross-site
+# POST/DELETE requests, which neutralises CSRF for the state-changing API
+# without a separate token (all GETs are read-only). Secure is off only in
+# local debug so http://localhost works; production is HTTPS behind Caddy.
+SESSION_COOKIE = "sp_session"
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=TOKEN_EXPIRE_SECONDS,
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
 
 
 @router.get("/config")
@@ -86,13 +110,19 @@ def _create_jwt(user: User) -> str:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if not credentials:
+    # Prefer the HttpOnly session cookie (SPA); fall back to a Bearer header so
+    # programmatic/API clients still work.
+    raw_token = request.cookies.get(SESSION_COOKIE)
+    if not raw_token and credentials:
+        raw_token = credentials.credentials
+    if not raw_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
-        payload = jwt.decode(credentials.credentials, settings.secret_key, algorithms=[ALGORITHM])
+        payload = jwt.decode(raw_token, settings.secret_key, algorithms=[ALGORITHM])
         user_id = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
@@ -107,10 +137,30 @@ async def get_current_user(
     return user
 
 
+@router.get("/me")
+async def me(current_user: Annotated[User, Depends(get_current_user)]):
+    """Who am I — the SPA calls this on load to decide login vs app (the JWT
+    lives in an HttpOnly cookie it can't read itself)."""
+    return {
+        "id": current_user.id,
+        "first_name": current_user.first_name,
+        "username": current_user.username,
+    }
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """Clear the session cookie (this device only). No auth required — clearing
+    an already-invalid cookie is harmless."""
+    _clear_session_cookie(response)
+    return {"message": "Вы вышли."}
+
+
 @router.get("/telegram")
 @limiter.limit("10/minute")
 async def telegram_login_get(
     request: Request,
+    response: Response,
     id: int = Query(...),
     first_name: str = Query(...),
     auth_date: int = Query(...),
@@ -131,6 +181,7 @@ async def telegram_login_get(
         first_name=data.first_name, last_name=data.last_name, username=data.username,
     )
     token = _create_jwt(user)
+    _set_session_cookie(response, token)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -188,7 +239,7 @@ def _verify_webapp_init_data(init_data: str) -> dict | None:
 
 @router.post("/telegram/miniapp")
 @limiter.limit("10/minute")
-async def miniapp_login(request: Request, data: MiniAppAuthData, db: AsyncSession = Depends(get_db)):
+async def miniapp_login(request: Request, response: Response, data: MiniAppAuthData, db: AsyncSession = Depends(get_db)):
     """Login via Telegram Mini App (initData verification)."""
     user_data = _verify_webapp_init_data(data.init_data)
     if not user_data:
@@ -208,6 +259,7 @@ async def miniapp_login(request: Request, data: MiniAppAuthData, db: AsyncSessio
         username=user_data.get("username"),
     )
     token = _create_jwt(user)
+    _set_session_cookie(response, token)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -285,7 +337,7 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
 
 @router.get("/telegram/magic-link/verify")
 @limiter.limit("10/minute")
-async def verify_magic_link(request: Request, token: str = Query(...), db: AsyncSession = Depends(get_db)):
+async def verify_magic_link(request: Request, response: Response, token: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Verify a magic link token and return a JWT."""
     import logging
     try:
@@ -316,6 +368,7 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
             raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
         jwt_token = _create_jwt(user)
+        _set_session_cookie(response, jwt_token)
         return {"access_token": jwt_token, "token_type": "bearer"}
     except HTTPException:
         raise
@@ -328,18 +381,20 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
 @router.post("/logout-all")
 async def logout_all(
     current_user: Annotated[User, Depends(get_current_user)],
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Revoke every JWT issued to the caller (this device included) by bumping
     their token_version. Use after a suspected token/device compromise."""
     current_user.token_version = (current_user.token_version or 0) + 1
     await db.flush()
+    _clear_session_cookie(response)
     return {"message": "Все сессии завершены. Войдите заново."}
 
 
 @router.post("/telegram")
 @limiter.limit("10/minute")
-async def telegram_login(request: Request, data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
+async def telegram_login(request: Request, response: Response, data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
     if not _verify_telegram_hash(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
 
@@ -348,5 +403,6 @@ async def telegram_login(request: Request, data: TelegramAuthData, db: AsyncSess
         first_name=data.first_name, last_name=data.last_name, username=data.username,
     )
     token = _create_jwt(user)
+    _set_session_cookie(response, token)
     return {"access_token": token, "token_type": "bearer"}
 

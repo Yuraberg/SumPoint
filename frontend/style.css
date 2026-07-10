@@ -70,34 +70,42 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--sb-bg);
+  padding: 32px;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(217,119,87,.08), transparent 60%),
+    var(--main-bg);
 }
 .login-card {
-  text-align: center;
-  padding: 48px 56px;
-  background: #2e2a26;
-  border-radius: 16px;
+  width: 100%;
+  max-width: 396px;
+  padding: 40px 40px 30px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(38,35,33,.04), 0 12px 32px -12px rgba(38,35,33,.18);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  align-items: center;
-  border: 1px solid var(--sb-border);
+  gap: 22px;
 }
-.login-logo {
-  font-family: var(--font-serif);
-  font-size: 1.5rem;
-  font-weight: 400;
-  color: #f4f1ea;
-  letter-spacing: -0.3px;
+.login-brand { display: flex; align-items: center; gap: 10px; }
+.login-mark {
+  width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+  background: linear-gradient(145deg, var(--accent), var(--accent-dark));
+  display: grid; place-items: center;
+  color: #fff; font-family: var(--font-serif); font-size: 17px; line-height: 1;
+  box-shadow: 0 2px 8px -2px rgba(217,119,87,.6);
 }
-.login-card h1 {
-  font-family: var(--font-serif);
-  font-size: 1.3rem;
-  color: #f4f1ea;
-  font-weight: 400;
-  max-width: 300px;
+.login-wordmark {
+  font-family: var(--font-serif); font-size: 20px; color: var(--text); letter-spacing: -.2px;
 }
-.login-card p { color: var(--sb-text); font-size: 13px; }
+.login-head { display: flex; flex-direction: column; gap: 8px; }
+.login-head h1 {
+  margin: 0; font-family: var(--font-serif); font-weight: 400;
+  font-size: 25px; line-height: 1.2; letter-spacing: -.3px; color: var(--text);
+  text-wrap: balance;
+}
+.login-head p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); max-width: 34ch; }
+.login-widget { display: flex; justify-content: center; min-height: 1px; }
 
 /* ── App Shell ───────────────────────────────────────────────────────────────── */
 .app-shell {
@@ -902,87 +910,63 @@ body {
 }
 
 /* ── Magic Link ──────────────────────────────────────────────────────────────── */
-.magic-link-section {
-  margin: 20px 0 0;
-  text-align: center;
+.login-divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--muted); font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: .08em;
 }
-.magic-link-hint {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 10px;
+.login-divider::before, .login-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
 }
-.magic-link-hint code {
-  background: var(--input-bg);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-}
+.magic-link-section { display: flex; flex-direction: column; gap: 9px; }
+.magic-label { font-size: 12px; font-weight: 600; color: var(--text); }
 .magic-link-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0;
-  margin-top: 8px;
+  display: flex; align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border); border-radius: 11px;
+  overflow: hidden;
+  transition: border-color .15s, box-shadow .15s;
 }
-.magic-at {
-  color: var(--muted);
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-right: none;
-  padding: 8px 10px;
-  border-radius: 6px 0 0 6px;
-  font-size: 14px;
-}
-.magic-input {
-  padding: 8px 10px;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
-  border-left: none;
-  color: var(--fg);
-  font-size: 14px;
-  width: 160px;
-  border-radius: 0;
-  outline: none;
-}
-.magic-input:focus {
+.magic-link-row:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(217,119,87,0.18);
+  box-shadow: 0 0 0 3px var(--tag-bg);
 }
+.magic-at { padding: 0 4px 0 14px; color: var(--muted); font-size: 14.5px; }
+.magic-input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  color: var(--text); font-size: 14.5px; padding: 12px 12px 12px 2px;
+}
+.magic-input::placeholder { color: var(--muted); }
 .btn-magic {
-  padding: 8px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 0 6px 6px 0;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 11px; font-size: 14px; font-weight: 600;
+  padding: 12px 16px; cursor: pointer; white-space: nowrap;
+  transition: background .15s;
 }
-.btn-magic:hover { opacity: 0.85; }
-.btn-magic:disabled { opacity: 0.5; cursor: default; }
-.magic-status {
-  font-size: 13px;
-  margin-top: 8px;
-  min-height: 20px;
+.btn-magic:hover { background: var(--accent-dark); }
+.btn-magic:disabled { opacity: 0.55; cursor: default; }
+.magic-link-hint { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0; }
+.magic-link-hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+  background: var(--tag-bg); color: var(--tag-text); padding: 1px 6px; border-radius: 5px;
 }
+.magic-link-hint a { color: var(--tag-text); text-decoration: none; }
+.magic-status { font-size: 12.5px; min-height: 1em; }
 .magic-status.success { color: var(--green); }
 .magic-status.error { color: var(--red); }
-.widget-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 16px 0 8px;
-  color: var(--muted);
-  font-size: 12px;
+.login-foot {
+  display: flex; flex-direction: column; gap: 4px;
+  text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.5;
+  padding-top: 4px; border-top: 1px solid var(--border-soft);
 }
-.widget-divider::before,
-.widget-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
+.login-credit a { color: var(--accent-dark); text-decoration: none; font-weight: 600; }
+.login-credit a:hover { text-decoration: underline; }
+.sidebar-credit {
+  display: block; margin-top: 10px;
+  font-size: 11px; color: var(--sb-text); opacity: .7;
+  text-decoration: none;
 }
+.sidebar-credit:hover { opacity: 1; color: var(--sb-active); }
 
 /* ── Resizable table columns ───────────────────────────────────────────────── */
 .posts-table thead th,

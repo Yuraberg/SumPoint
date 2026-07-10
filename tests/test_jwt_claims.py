@@ -27,3 +27,20 @@ def test_create_jwt_defaults_token_version_zero():
     token = _create_jwt(user)
     payload = jwt.decode(token, settings.secret_key, algorithms=[JWT_ALGORITHM])
     assert payload["tv"] == 0
+
+
+def test_session_cookie_has_secure_flags():
+    """The session cookie must be HttpOnly + SameSite=Lax so JS can't read it
+    and it isn't attached to cross-site POST/DELETE (CSRF)."""
+    from fastapi import Response
+
+    from app.api.auth import SESSION_COOKIE, _set_session_cookie
+
+    resp = Response()
+    _set_session_cookie(resp, "jwt-value")
+    header = resp.headers["set-cookie"].lower()
+    assert f"{SESSION_COOKIE}=jwt-value" in resp.headers["set-cookie"]
+    assert "httponly" in header
+    assert "samesite=lax" in header
+    assert "path=/" in header
+
