@@ -135,6 +135,18 @@ if not _settings.debug:
             "Set CORS_ORIGINS to your frontend domain(s) before launch.",
             localhost_origins,
         )
+    # APP_BASE_URL builds the login link sent via the Telegram bot (magic
+    # link) and the Mini App URL. Left at its localhost default, that link is
+    # unreachable from a user's phone — the bot message arrives but the link
+    # in it goes nowhere, which reads as "there's no link".
+    if "localhost" in _settings.app_base_url or "127.0.0.1" in _settings.app_base_url:
+        import logging
+        logging.getLogger("uvicorn").warning(
+            "APP_BASE_URL is still %r in production mode. The Telegram magic-link "
+            "login button will point at an unreachable address — set APP_BASE_URL "
+            "to your public domain (e.g. https://sum.example.com).",
+            _settings.app_base_url,
+        )
 
 app.include_router(api_router, prefix="/api/v1")
 

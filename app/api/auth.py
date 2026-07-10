@@ -284,8 +284,19 @@ async def _send_telegram_message(chat_id: int, text: str) -> bool:
                 "text": text,
                 "parse_mode": "HTML",
             })
-            logger.info(f"Telegram sendMessage chat_id={chat_id} status={resp.status_code} body={resp.text[:200]}")
-            return resp.status_code == 200
+            ok = resp.status_code == 200
+            # WARNING (not INFO) on failure so it's visible at the default
+            # production LOG_LEVEL — a bad HTML entity (e.g. an unreachable
+            # APP_BASE_URL scheme) makes Telegram reject the whole message,
+            # which otherwise fails completely silently.
+            if ok:
+                logger.debug(f"Telegram sendMessage chat_id={chat_id} status={resp.status_code}")
+            else:
+                logger.warning(
+                    f"Telegram sendMessage failed chat_id={chat_id} "
+                    f"status={resp.status_code} body={resp.text[:300]}"
+                )
+            return ok
     except Exception as exc:
         # Don't log str(exc) — httpx exceptions may embed the request URL,
         # which contains the bot token.
@@ -317,10 +328,14 @@ async def request_magic_link(request: Request, data: MagicLinkRequest, db: Async
         magic = MagicLink(user_id=user.id, expires_at=expires_at, token=uuid.uuid4().hex)
 
         login_url = f"{settings.app_base_url}/?token={magic.token}"
+        # The link text IS the URL (not a generic "click here") so it's visible
+        # and copy-pasteable even if a client fails to render the <a> as
+        # clickable — e.g. because APP_BASE_URL was misconfigured to a
+        # non-public host, which some Telegram clients decline to auto-link.
         sent = await _send_telegram_message(
             user.chat_id,
             f"🔗 <b>Ссылка для входа в SumPoint</b>\n\n"
-            f"<a href=\"{login_url}\">Нажмите сюда, чтобы войти</a>\n\n"
+            f"<a href=\"{login_url}\">{login_url}</a>\n\n"
             f"Ссылка действительна {MAGIC_LINK_TTL_MINUTES} минут.",
         )
 
