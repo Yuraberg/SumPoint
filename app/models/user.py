@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,6 +23,11 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # Telegram chat ID for bot DM
+
+    # Bumped to invalidate every JWT already issued to this user (logout
+    # everywhere / revoke on compromise). Each JWT carries the value it was
+    # minted with as the "tv" claim; get_current_user rejects a mismatch.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Digest preferences
     digest_morning: Mapped[bool] = mapped_column(Boolean, default=True)

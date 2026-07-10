@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -72,8 +72,16 @@ def _verify_telegram_hash(data: TelegramAuthData) -> bool:
     return hmac.compare_digest(expected, data.hash)
 
 
-def _create_jwt(user_id: int) -> str:
-    payload = {"sub": str(user_id), "exp": int(time.time()) + TOKEN_EXPIRE_SECONDS}
+def _create_jwt(user: User) -> str:
+    now = int(time.time())
+    payload = {
+        "sub": str(user.id),
+        # revocation: must match the user's current version. `or 0` guards a
+        # transient (un-flushed) instance whose column default hasn't fired.
+        "tv": user.token_version or 0,
+        "iat": now,
+        "exp": now + TOKEN_EXPIRE_SECONDS,
+    }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
@@ -91,6 +99,11 @@ async def get_current_user(
     user = await user_repository.get_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # A token minted before the user bumped token_version (logout-everywhere /
+    # revoke-on-compromise) is no longer valid. Absent claim → treat as 0 so
+    # tokens minted before this feature keep working until they expire.
+    if payload.get("tv", 0) != user.token_version:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
     return user
 
 
@@ -117,7 +130,7 @@ async def telegram_login_get(
         db, data.id,
         first_name=data.first_name, last_name=data.last_name, username=data.username,
     )
-    token = _create_jwt(user.id)
+    token = _create_jwt(user)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -194,7 +207,7 @@ async def miniapp_login(request: Request, data: MiniAppAuthData, db: AsyncSessio
         last_name=user_data.get("last_name"),
         username=user_data.get("username"),
     )
-    token = _create_jwt(user.id)
+    token = _create_jwt(user)
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -276,29 +289,33 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
     """Verify a magic link token and return a JWT."""
     import logging
     try:
+        # Atomic claim: mark used only if still unused, so two concurrent
+        # verifies of the same link can't both succeed (double-spend). The
+        # UPDATE ... WHERE used=false RETURNING lets exactly one caller win.
         result = await db.execute(
-            select(MagicLink).where(
+            update(MagicLink)
+            .where(
                 MagicLink.token == token,
                 MagicLink.used.is_(False),
                 MagicLink.expires_at > utcnow(),
             )
+            .values(used=True)
+            .returning(MagicLink.user_id)
         )
-        magic = result.scalar_one_or_none()
+        row = result.first()
 
-        if not magic:
+        if not row:
             raise HTTPException(
                 status_code=400,
                 detail="Ссылка недействительна или истекла. Запросите новую.",
             )
-
-        magic.used = True
         await db.flush()
 
-        user = await user_repository.get_by_id(db, magic.user_id)
+        user = await user_repository.get_by_id(db, row.user_id)
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден.")
 
-        jwt_token = _create_jwt(user.id)
+        jwt_token = _create_jwt(user)
         return {"access_token": jwt_token, "token_type": "bearer"}
     except HTTPException:
         raise
@@ -306,6 +323,18 @@ async def verify_magic_link(request: Request, token: str = Query(...), db: Async
         # Don't leak internal error detail to the client.
         logging.getLogger("sumpoint.auth").exception("verify_magic_link failed")
         raise HTTPException(status_code=500, detail="Внутренняя ошибка. Попробуйте позже.")
+
+
+@router.post("/logout-all")
+async def logout_all(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke every JWT issued to the caller (this device included) by bumping
+    their token_version. Use after a suspected token/device compromise."""
+    current_user.token_version = (current_user.token_version or 0) + 1
+    await db.flush()
+    return {"message": "Все сессии завершены. Войдите заново."}
 
 
 @router.post("/telegram")
@@ -318,6 +347,6 @@ async def telegram_login(request: Request, data: TelegramAuthData, db: AsyncSess
         db, data.id,
         first_name=data.first_name, last_name=data.last_name, username=data.username,
     )
-    token = _create_jwt(user.id)
+    token = _create_jwt(user)
     return {"access_token": token, "token_type": "bearer"}
 

@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.router import api_router
 from app.config import get_settings
@@ -16,6 +17,34 @@ from app.logging import request_id_var
 from app.rate_limit import limiter
 
 _settings = get_settings()
+
+# Content-Security-Policy. script-src omits 'unsafe-inline' so an injected
+# <script> (or stolen-then-replayed inline handler) can't run and exfiltrate the
+# localStorage JWT — the frontend was refactored to external files + delegated
+# listeners to satisfy this. Telegram's Login Widget needs its script host and
+# an iframe (oauth.telegram.org). style-src keeps 'unsafe-inline' because the
+# markup uses style="" attributes and CSS injection is far lower risk.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://telegram.org https://oauth.telegram.org; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https://telegram.org; "
+    "connect-src 'self'; "
+    "frame-src https://oauth.telegram.org https://telegram.org; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "object-src 'none'"
+)
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": _CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    # Ignored by browsers over plain HTTP; takes effect once behind HTTPS.
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+}
 
 # ── Logging configuration ────────────────────────────────────────────
 # Development: human-readable text logs
@@ -61,11 +90,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.state.limiter = limiter
+# Enforces the limiter's default_limits on every route without its own
+# @limiter.limit (a global anti-abuse floor); decorated routes keep their limit.
+app.add_middleware(SlowAPIMiddleware)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 _access_logger = logging.getLogger("app.access")
@@ -83,6 +115,8 @@ async def request_id_middleware(request: Request, call_next):
         response = await call_next(request)
         duration_ms = round((time.monotonic() - started) * 1000, 1)
         response.headers["X-Request-ID"] = req_id
+        for header, value in _SECURITY_HEADERS.items():
+            response.headers.setdefault(header, value)
         _access_logger.info(
             "%s %s %s %sms", request.method, request.url.path, response.status_code, duration_ms
         )
@@ -106,6 +140,7 @@ app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/health")
+@limiter.exempt
 async def health():
     return {"status": "ok"}
 
@@ -114,6 +149,7 @@ async def health():
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.isdir(frontend_dir):
     @app.get("/{full_path:path}")
+    @limiter.exempt
     async def serve_spa(full_path: str):
         """Serve frontend files, falling back to index.html for SPA routing."""
         # Prevent directory traversal (including absolute-path escapes)

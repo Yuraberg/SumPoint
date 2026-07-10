@@ -3,6 +3,10 @@ to avoid a circular import between them."""
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.config import get_settings
+
+_settings = get_settings()
+
 
 def _client_ip(request) -> str:
     """Real client IP, not Caddy's. The app only ever receives traffic
@@ -25,4 +29,15 @@ def _client_ip(request) -> str:
     return get_remote_address(request)
 
 
-limiter = Limiter(key_func=_client_ip)
+# Redis-backed so limits are shared across worker processes and survive a
+# restart (the in-memory default reset every deploy and gave each uvicorn
+# worker its own bucket). ``default_limits`` is a global safety net applied to
+# any route without its own @limiter.limit; per-route decorators still win.
+# ``swallow_errors`` fails open — a Redis blip must not 500 every request or
+# lock users out of auth.
+limiter = Limiter(
+    key_func=_client_ip,
+    storage_uri=_settings.redis_url,
+    default_limits=["240/minute"],
+    swallow_errors=True,
+)

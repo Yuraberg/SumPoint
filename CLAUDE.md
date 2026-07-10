@@ -65,6 +65,7 @@ python generate_session.py
 
 ### API endpoints
 - `GET|POST /auth/telegram` — Telegram Login Widget HMAC verification, returns 7-day JWT
+- `POST /auth/logout-all` — bumps the caller's `users.token_version`, invalidating every JWT already issued to them (logout-everywhere / revoke-on-compromise)
 - `GET|POST|DELETE /channels/` — list, add, remove channels
 - `POST /channels/{id}/toggle` — enable/disable a channel; re-enabling clears the failure counter and last_error
 - `POST /channels/import` — imports user's Telegram subscriptions via Celery worker
@@ -116,6 +117,12 @@ All prompts live in `app/prompts/` (`classification.py`, `summarization.py`, `ev
 All settings loaded from `.env` via Pydantic `Settings` in `app/config.py` (cached with `lru_cache`). Copy `.env.example` to `.env` before first run.
 
 Critical vars: `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_SESSION_STRING`, `TELEGRAM_BOT_TOKEN`, `DEEPSEEK_API_KEY`, `DATABASE_URL`, `SESSION_ENCRYPTION_KEY` (32-byte hex: `openssl rand -hex 32`), `SECRET_KEY`.
+
+### Security posture
+- **Auth:** all four Telegram flows (Login Widget, Mini App, Magic Link) verify an HMAC-SHA256 with `hmac.compare_digest` and a 24h `auth_date` freshness window, then mint a JWT (HS256, `SECRET_KEY`, claims `sub`/`tv`/`iat`/`exp`, 7-day expiry). `get_current_user` rejects a token whose `tv` != the user's `token_version`, so `POST /auth/logout-all` (bumps `token_version`) instantly revokes every issued token.
+- **Rate limiting:** slowapi keyed on the real client IP (last `X-Forwarded-For` entry, un-spoofable behind Caddy), **Redis-backed** (`REDIS_URL`) so limits are shared across workers and survive restarts, with `swallow_errors` (fail-open on a Redis blip) and a global `240/min` default (`SlowAPIMiddleware`); `/health` and static serving are exempt.
+- **Headers:** every response carries CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and HSTS (set in `app/main.py`). The CSP `script-src` omits `'unsafe-inline'` — the frontend uses external files + delegated listeners (no inline `on*`/`<script>`), so an injected script can't run and steal the localStorage JWT; Telegram's widget host + iframe are whitelisted.
+- **Data isolation:** every query is scoped by `channels.user_id` / `user_id`; Telethon sessions are AES-256-GCM encrypted at rest.
 
 Digest schedule controlled by `DIGEST_MORNING_HOUR` and `DIGEST_EVENING_HOUR` (UTC integers, defaults 8 and 20). Continuous fetch/processing controlled by `POSTS_FETCH_INTERVAL_MINUTES` (default 20) and `POSTS_FETCH_BATCH_SIZE` (default 20).
 

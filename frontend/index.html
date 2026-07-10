@@ -5,14 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SumPoint</title>
   <link rel="stylesheet" href="style.css" />
-  <script>
-    // Apply the saved (or OS-preferred) theme before first paint — no flash.
-    (function () {
-      var t = localStorage.getItem("sp_theme");
-      if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      document.documentElement.setAttribute("data-theme", t);
-    })();
-  </script>
+  <script src="theme-init.js"></script>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -34,7 +27,7 @@
         <div class="magic-link-row">
           <span class="magic-at">@</span>
           <input id="magic-username" type="text" placeholder="username" class="magic-input" />
-          <button id="magic-btn" class="btn-magic" onclick="requestMagicLink()">
+          <button id="magic-btn" class="btn-magic">
             Получить ссылку
           </button>
         </div>
@@ -335,7 +328,7 @@
             <h1 class="page-title">РАСПИСАНИЕ</h1>
             <p class="page-subtitle">Автоматический сбор и генерация сводок</p>
           </div>
-          <button class="btn-primary" onclick="openSchedModal()">+ Создать расписание</button>
+          <button id="sched-open-btn" class="btn-primary">+ Создать расписание</button>
         </div>
 
         <div class="table-container">
@@ -361,11 +354,11 @@
       </div>
 
       <!-- CREATE SCHEDULE MODAL -->
-      <div id="sched-modal" class="modal-backdrop" style="display:none" onclick="closeSchedModal(event)">
-        <div class="modal-card" onclick="event.stopPropagation()">
+      <div id="sched-modal" class="modal-backdrop" style="display:none">
+        <div class="modal-card">
           <div class="modal-header">
             <h2 class="modal-title">Новое расписание</h2>
-            <button class="modal-close" onclick="closeSchedModal()">✕</button>
+            <button class="modal-close" id="sched-close-btn">✕</button>
           </div>
 
           <div class="modal-body">
@@ -376,16 +369,16 @@
 
             <div class="form-group">
               <label class="form-label">Тип</label>
-              <div class="type-btns">
-                <button class="type-btn active" data-type="topics" onclick="selectType(this)">Темы</button>
-                <button class="type-btn" data-type="events" onclick="selectType(this)">События</button>
-                <button class="type-btn" data-type="collect" onclick="selectType(this)">Сбор</button>
+              <div class="type-btns" id="type-btns">
+                <button class="type-btn active" data-type="topics">Темы</button>
+                <button class="type-btn" data-type="events">События</button>
+                <button class="type-btn" data-type="collect">Сбор</button>
               </div>
             </div>
 
             <div class="form-group">
               <label class="form-label">Расписание</label>
-              <select id="m-cron-preset" class="filter-select" style="width:100%" onchange="onPresetChange(this)">
+              <select id="m-cron-preset" class="filter-select" style="width:100%">
                 <option value="0 9 * * *">Каждый день в 09:00</option>
                 <option value="0 12 * * *">Каждый день в 12:00</option>
                 <option value="0 21 * * *">Каждый день в 21:00</option>
@@ -432,8 +425,8 @@
           </div>
 
           <div class="modal-footer">
-            <button class="btn-secondary" onclick="closeSchedModal()">Отмена</button>
-            <button class="btn-primary" onclick="createSchedule()">Создать</button>
+            <button class="btn-secondary" id="sched-cancel-btn">Отмена</button>
+            <button class="btn-primary" id="sched-create-btn">Создать</button>
           </div>
         </div>
       </div>
@@ -463,11 +456,11 @@
   </div>
 
   <!-- DUPLICATE CLUSTER SOURCES MODAL -->
-  <div id="cluster-modal" class="modal-backdrop" style="display:none" onclick="closeClusterModal(event)">
-    <div class="modal-card" onclick="event.stopPropagation()">
+  <div id="cluster-modal" class="modal-backdrop" style="display:none">
+    <div class="modal-card">
       <div class="modal-header">
         <h2 class="modal-title">Источники новости</h2>
-        <button id="cluster-modal-close" class="modal-close" onclick="closeClusterModal()">✕</button>
+        <button id="cluster-modal-close" class="modal-close">✕</button>
       </div>
       <div class="modal-body" id="cluster-modal-body"></div>
     </div>

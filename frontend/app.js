@@ -237,6 +237,52 @@ async function tryMagicLinkVerify() {
   }
 }
 
+function _on(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+}
+
+function wireStaticHandlers() {
+  // Login
+  _on("magic-btn", "click", requestMagicLink);
+
+  // Schedule modal open/close/create
+  _on("sched-open-btn", "click", openSchedModal);
+  _on("sched-close-btn", "click", () => closeSchedModal());
+  _on("sched-cancel-btn", "click", () => closeSchedModal());
+  _on("sched-create-btn", "click", createSchedule);
+  _on("sched-modal", "click", e => closeSchedModal(e));
+  _on("m-cron-preset", "change", e => onPresetChange(e.target));
+  const typeBtns = document.getElementById("type-btns");
+  if (typeBtns) typeBtns.addEventListener("click", e => {
+    const btn = e.target.closest(".type-btn");
+    if (btn) selectType(btn);
+  });
+
+  // Cluster sources modal
+  _on("cluster-modal", "click", e => closeClusterModal(e));
+  _on("cluster-modal-close", "click", () => closeClusterModal());
+
+  // Delegated row actions (rows are built via innerHTML, so listeners can't be
+  // bound at creation without inline handlers). data-action + data-id drive it.
+  const channelsList = document.getElementById("channels-list");
+  if (channelsList) channelsList.addEventListener("click", _onRowAction);
+  const schedTbody = document.getElementById("sched-tbody");
+  if (schedTbody) schedTbody.addEventListener("click", _onRowAction);
+}
+
+function _onRowAction(e) {
+  const btn = e.target.closest("[data-action]");
+  if (!btn) return;
+  const id = btn.dataset.id;
+  switch (btn.dataset.action) {
+    case "remove-channel": removeChannel(Number(id)); break;
+    case "toggle-channel": toggleChannel(Number(id)); break;
+    case "delete-schedule": deleteSchedule(Number(id)); break;
+    case "toggle-schedule": toggleSchedule(Number(id), btn); break;
+  }
+}
+
 async function requestMagicLink() {
   const input = document.getElementById("magic-username");
   const btn = document.getElementById("magic-btn");
@@ -393,6 +439,10 @@ document.addEventListener("DOMContentLoaded", () => {
   if (chatInput) chatInput.addEventListener("keydown", e => {
     if (e.key === "Enter") sendChatQuestion();
   });
+
+  // Handlers moved out of inline on* attributes so the CSP can forbid inline
+  // scripts (defends the localStorage token against injected-script XSS).
+  wireStaticHandlers();
 
   // Keyboard navigation
   document.addEventListener("keydown", handleFeedKey);
@@ -1269,16 +1319,15 @@ async function loadChannels() {
         : "";
       const offBadge = ch.is_active === false
         ? `<span class="ch-off-badge">выключен</span>` : "";
-      const toggleBtn = ch.is_active === false
-        ? `<button class="btn-ghost-sm ch-toggle" onclick="toggleChannel(${ch.channel_id})">Включить</button>`
-        : `<button class="btn-ghost-sm ch-toggle" onclick="toggleChannel(${ch.channel_id})">Выключить</button>`;
+      const toggleLabel = ch.is_active === false ? "Включить" : "Выключить";
+      const toggleBtn = `<button class="btn-ghost-sm ch-toggle" data-action="toggle-channel" data-id="${ch.channel_id}">${toggleLabel}</button>`;
       li.innerHTML = `
         <div class="channel-health-top">
           <span class="ch-dot ${state}" title="${state}"></span>
           <span class="channel-item-name">${escHtml(ch.title || ch.username || String(ch.channel_id))}</span>
           ${offBadge}
           ${toggleBtn}
-          <button class="channel-remove" onclick="removeChannel(${ch.channel_id})">✕</button>
+          <button class="channel-remove" data-action="remove-channel" data-id="${ch.channel_id}">✕</button>
         </div>
         <div class="channel-health-meta">
           <span>Постов: <b>${ch.post_count}</b></span>
@@ -1424,13 +1473,13 @@ function renderSchedRow(s) {
     <td class="cron-text">${escHtml(s.cron_expr)}</td>
     <td class="last-run">${topicsLabel}</td>
     <td>
-      <button class="status-btn ${s.status}" onclick="toggleSchedule(${s.id}, this)">
+      <button class="status-btn ${s.status}" data-action="toggle-schedule" data-id="${s.id}">
         ${s.status === "active" ? "Активно" : "Пауза"}
       </button>
     </td>
     <td class="last-run">${lastRun}</td>
     <td>
-      <button class="row-del-btn" onclick="deleteSchedule(${s.id})" title="Удалить">✕</button>
+      <button class="row-del-btn" data-action="delete-schedule" data-id="${s.id}" title="Удалить">✕</button>
     </td>
   `;
   return tr;
