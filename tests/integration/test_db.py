@@ -261,3 +261,44 @@ async def test_duplicate_clustering(engine, _create_tables):
         members = await post_repository.get_cluster_members(db, 1, p_a.cluster_id)
         assert {m.id for m in members} == {p_a.id, p_b.id}
         assert await post_repository.get_cluster_members(db, 2, p_a.cluster_id) == []
+
+
+@pytest.mark.integration
+async def test_access_control_signup_and_invite_flow(db, monkeypatch):
+    """login_or_signup's approval decision (owner allowlist / invite code /
+    pending) and invite-code single-use consumption, against a real DB."""
+    from app.config import get_settings
+    from app.repositories import invite_repository, user_repository
+
+    # owner_telegram_id_set is a computed property over the owner_telegram_ids
+    # field; patching the underlying field on the lru_cache'd Settings
+    # singleton affects every caller for the duration of this test.
+    monkeypatch.setattr(get_settings(), "owner_telegram_ids", "1")
+
+    # Owner (id=1) is auto-approved on first login, no invite code needed.
+    owner = await user_repository.login_or_signup(db, 1, first_name="Owner")
+    assert owner.is_approved is True
+
+    # Stranger with no code lands pending.
+    stranger = await user_repository.login_or_signup(db, 2, first_name="Stranger")
+    assert stranger.is_approved is False
+
+    # A valid invite code auto-approves a brand-new signup and gets consumed.
+    invite = await invite_repository.create(db, created_by=1, max_uses=1)
+    await db.flush()
+    invitee = await user_repository.login_or_signup(
+        db, 3, first_name="Invitee", invite_code=invite.code
+    )
+    assert invitee.is_approved is True
+
+    # The same code is single-use: a second signup with it stays pending.
+    latecomer = await user_repository.login_or_signup(
+        db, 4, first_name="Latecomer", invite_code=invite.code
+    )
+    assert latecomer.is_approved is False
+
+    # Logging in again (existing user) never re-evaluates or re-burns a code.
+    again = await user_repository.login_or_signup(
+        db, 2, first_name="Stranger", invite_code=invite.code
+    )
+    assert again.is_approved is False

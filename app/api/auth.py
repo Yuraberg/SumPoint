@@ -140,11 +140,16 @@ async def get_current_user(
 @router.get("/me")
 async def me(current_user: Annotated[User, Depends(get_current_user)]):
     """Who am I — the SPA calls this on load to decide login vs app (the JWT
-    lives in an HttpOnly cookie it can't read itself)."""
+    lives in an HttpOnly cookie it can't read itself), and whether to show the
+    "pending approval" screen instead of the app for a not-yet-approved user."""
+    from app.api.deps import is_effectively_approved
+
     return {
         "id": current_user.id,
         "first_name": current_user.first_name,
         "username": current_user.username,
+        "is_approved": is_effectively_approved(current_user),
+        "is_owner": current_user.id in settings.owner_telegram_id_set,
     }
 
 
@@ -168,6 +173,7 @@ async def telegram_login_get(
     last_name: str | None = Query(None),
     username: str | None = Query(None),
     photo_url: str | None = Query(None),
+    invite_code: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     data = TelegramAuthData(
@@ -176,9 +182,10 @@ async def telegram_login_get(
     )
     if not _verify_telegram_hash(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
-    user = await user_repository.get_or_create(
+    user = await user_repository.login_or_signup(
         db, data.id,
         first_name=data.first_name, last_name=data.last_name, username=data.username,
+        invite_code=invite_code,
     )
     token = _create_jwt(user)
     _set_session_cookie(response, token)
@@ -190,6 +197,7 @@ async def telegram_login_get(
 
 class MiniAppAuthData(BaseModel):
     init_data: str  # raw initData string from Telegram.WebApp.initData
+    invite_code: str | None = None
 
 
 def _verify_webapp_init_data(init_data: str) -> dict | None:
@@ -252,11 +260,12 @@ async def miniapp_login(request: Request, response: Response, data: MiniAppAuthD
     if not tid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user id")
 
-    user = await user_repository.get_or_create(
+    user = await user_repository.login_or_signup(
         db, tid,
         first_name=user_data.get("first_name", ""),
         last_name=user_data.get("last_name"),
         username=user_data.get("username"),
+        invite_code=data.invite_code,
     )
     token = _create_jwt(user)
     _set_session_cookie(response, token)
@@ -407,15 +416,46 @@ async def logout_all(
     return {"message": "Все сессии завершены. Войдите заново."}
 
 
+class RedeemInviteIn(BaseModel):
+    code: str
+
+
+@router.post("/redeem-invite")
+@limiter.limit("10/minute")
+async def redeem_invite(
+    request: Request,
+    body: RedeemInviteIn,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Let an authenticated-but-pending user unlock their own account with an
+    invite code from the web pending screen (identity alone gets you here via
+    get_current_user; approval is exactly what's being granted)."""
+    from app.repositories import invite_repository
+
+    if current_user.is_approved:
+        return {"is_approved": True}
+    if not await invite_repository.try_consume(db, body.code):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Код недействителен или уже использован.")
+    current_user.is_approved = True
+    await db.flush()
+    return {"is_approved": True}
+
+
 @router.post("/telegram")
 @limiter.limit("10/minute")
-async def telegram_login(request: Request, response: Response, data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
+async def telegram_login(
+    request: Request, response: Response, data: TelegramAuthData,
+    invite_code: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
     if not _verify_telegram_hash(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Telegram auth data")
 
-    user = await user_repository.get_or_create(
+    user = await user_repository.login_or_signup(
         db, data.id,
         first_name=data.first_name, last_name=data.last_name, username=data.username,
+        invite_code=invite_code,
     )
     token = _create_jwt(user)
     _set_session_cookie(response, token)

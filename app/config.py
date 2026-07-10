@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.constants import (
@@ -41,6 +42,24 @@ class Settings(BaseSettings):
     # Auth secrets
     secret_key: str
     session_encryption_key: str = ""
+
+    # Telegram user ids that always get instant access (bypass invite codes
+    # and manual approval) — put your own id here. Comma-separated, e.g.
+    # "123456789,987654321". Checked live on every request, not just at
+    # signup, so editing this list takes effect immediately without touching
+    # the database.
+    owner_telegram_ids: str = ""
+
+    @field_validator("owner_telegram_ids", mode="before")
+    @classmethod
+    def _normalize_owner_ids(cls, v):
+        return str(v) if v is not None else ""
+
+    @property
+    def owner_telegram_id_set(self) -> set[int]:
+        return {
+            int(x.strip()) for x in self.owner_telegram_ids.split(",") if x.strip()
+        }
 
     # CORS — JSON array of allowed origins, e.g. ["https://sum.procpoint.ru"]
     cors_origins: list[str] = ["http://localhost:8000", "http://localhost:8001"]

@@ -202,11 +202,13 @@ function onUnauthed() {
 async function tryMiniAppLogin() {
   if (!isMiniApp) return false;
   try {
+    const inviteEl = document.getElementById("invite-code-input");
+    const invite = inviteEl ? inviteEl.value.trim() : "";
     const resp = await fetch(`${API}/auth/telegram/miniapp`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ init_data: window.Telegram.WebApp.initData }),
+      body: JSON.stringify({ init_data: window.Telegram.WebApp.initData, invite_code: invite || null }),
     });
     if (!resp.ok) {
       console.error("MiniApp auth failed:", await resp.text());
@@ -284,6 +286,18 @@ function wireStaticHandlers() {
   _on("cluster-modal", "click", e => closeClusterModal(e));
   _on("cluster-modal-close", "click", () => closeClusterModal());
 
+  // Pending-approval screen
+  _on("pending-invite-btn", "click", activatePendingInvite);
+  _on("pending-invite-input", "keydown", e => { if (e.key === "Enter") activatePendingInvite(); });
+  _on("pending-logout-btn", "click", logout);
+
+  // Owner admin page
+  _on("create-invite-btn", "click", createInvite);
+  const pendingList = document.getElementById("pending-users-list");
+  if (pendingList) pendingList.addEventListener("click", _onRowAction);
+  const invitesList = document.getElementById("invites-list");
+  if (invitesList) invitesList.addEventListener("click", _onRowAction);
+
   // Delegated row actions (rows are built via innerHTML, so listeners can't be
   // bound at creation without inline handlers). data-action + data-id drive it.
   const channelsList = document.getElementById("channels-list");
@@ -301,6 +315,8 @@ function _onRowAction(e) {
     case "toggle-channel": toggleChannel(Number(id)); break;
     case "delete-schedule": deleteSchedule(Number(id)); break;
     case "toggle-schedule": toggleSchedule(Number(id), btn); break;
+    case "approve-user": approveUser(Number(id)); break;
+    case "delete-invite": deleteInvite(Number(id)); break;
   }
 }
 
@@ -496,7 +512,16 @@ async function loadPublicConfig() {
         script.setAttribute("data-size", "large");
         script.setAttribute("data-onauth", "onTelegramAuth(user)");
         script.setAttribute("data-request-access", "write");
+        // The widget silently renders nothing if the site's domain isn't
+        // registered for this bot via @BotFather /setdomain — no error, no
+        // button, just an empty area. Fall back to a visible hint instead of
+        // leaving that unexplained blank space (and also catch a genuine
+        // load failure, e.g. no network to telegram.org).
+        script.onerror = () => showWidgetFallback(container);
         container.appendChild(script);
+        setTimeout(() => {
+          if (!container.querySelector("iframe")) showWidgetFallback(container);
+        }, 4000);
       }
     }
   } catch {
@@ -504,13 +529,29 @@ async function loadPublicConfig() {
   }
 }
 
+function showWidgetFallback(container) {
+  if (container.querySelector(".login-widget-fallback")) return;
+  container.innerHTML =
+    '<p class="login-widget-fallback">Кнопка входа временно недоступна — воспользуйтесь ссылкой ниже.</p>';
+}
+
 // ── Show app ──────────────────────────────────────────────────────────────────
 
 function showApp() {
   document.getElementById("login-screen").style.display = "none";
+
+  if (currentUser && currentUser.is_approved === false) {
+    document.getElementById("pending-screen").style.display = "flex";
+    document.getElementById("app").style.display = "none";
+    return;
+  }
+  document.getElementById("pending-screen").style.display = "none";
+
   document.getElementById("app").style.display = "flex";
   const nameEl = document.getElementById("sidebar-user");
   if (nameEl && currentUser) nameEl.textContent = currentUser.first_name || "";
+  const adminNav = document.getElementById("nav-admin");
+  if (adminNav) adminNav.style.display = (currentUser && currentUser.is_owner) ? "" : "none";
   loadChannelsDropdown();
   refreshUnreadCount();
   navigate("posts");
@@ -541,13 +582,109 @@ function navigate(page) {
   else if (page === "chat") { const i = document.getElementById("chat-input"); if (i) i.focus(); }
   else if (page === "channels") loadChannels();
   else if (page === "schedule") loadSchedule();
+  else if (page === "admin") loadAdmin();
+}
+
+// ── Access control (pending screen + owner admin page) ─────────────────────────
+
+async function activatePendingInvite() {
+  const input = document.getElementById("pending-invite-input");
+  const status = document.getElementById("pending-status");
+  const code = input.value.trim();
+  if (!code) return;
+  try {
+    await apiFetch("/auth/redeem-invite", { method: "POST", body: JSON.stringify({ code }) });
+    status.textContent = "✓ Код принят! Загружаем приложение…";
+    status.className = "magic-status success";
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    status.textContent = "Код недействителен или уже использован.";
+    status.className = "magic-status error";
+  }
+}
+
+async function loadAdmin() {
+  try {
+    const pending = await apiFetch("/admin/pending-users");
+    const list = document.getElementById("pending-users-list");
+    const empty = document.getElementById("pending-users-empty");
+    list.innerHTML = "";
+    empty.style.display = (pending && pending.length) ? "none" : "block";
+    (pending || []).forEach(u => {
+      const li = document.createElement("li");
+      li.className = "channel-item";
+      const name = escHtml(u.username ? "@" + u.username : u.first_name);
+      li.innerHTML = `
+        <span class="channel-item-name">${name} <span style="color:var(--muted);font-size:12px">id ${u.id}</span></span>
+        <button class="btn-ghost-sm" data-action="approve-user" data-id="${u.id}">Одобрить</button>
+      `;
+      list.appendChild(li);
+    });
+  } catch (e) {
+    toast("Не удалось загрузить заявки: " + e.message, "error");
+  }
+
+  try {
+    const invites = await apiFetch("/admin/invites");
+    const list = document.getElementById("invites-list");
+    const empty = document.getElementById("invites-empty");
+    list.innerHTML = "";
+    empty.style.display = (invites && invites.length) ? "none" : "block";
+    (invites || []).forEach(inv => {
+      const li = document.createElement("li");
+      li.className = "channel-item";
+      const used = `${inv.uses}/${inv.max_uses}`;
+      li.innerHTML = `
+        <span class="channel-item-name">
+          <code>${escHtml(inv.code)}</code>
+          <span style="color:var(--muted);font-size:12px">использован ${used}</span>
+        </span>
+        <button class="channel-remove" data-action="delete-invite" data-id="${inv.id}">✕</button>
+      `;
+      list.appendChild(li);
+    });
+  } catch (e) {
+    toast("Не удалось загрузить коды: " + e.message, "error");
+  }
+}
+
+async function approveUser(id) {
+  try {
+    await apiFetch(`/admin/pending-users/${id}/approve`, { method: "POST" });
+    toast("Пользователь одобрен", "success");
+    loadAdmin();
+  } catch (e) {
+    toast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function createInvite() {
+  try {
+    const inv = await apiFetch("/admin/invites", { method: "POST", body: JSON.stringify({}) });
+    toast(`Код создан: ${inv.code}`, "success");
+    loadAdmin();
+  } catch (e) {
+    toast("Ошибка: " + e.message, "error");
+  }
+}
+
+async function deleteInvite(id) {
+  try {
+    await fetch(`${API}/admin/invites/${id}`, { method: "DELETE", credentials: "include" });
+    loadAdmin();
+  } catch (e) {
+    toast("Ошибка: " + e.message, "error");
+  }
 }
 
 // ── Telegram login ────────────────────────────────────────────────────────────
 
 async function onTelegramAuth(data) {
   try {
-    const resp = await fetch(`${API}/auth/telegram`, {
+    const inviteEl = document.getElementById("invite-code-input");
+    const invite = inviteEl ? inviteEl.value.trim() : "";
+    const qs = invite ? `?invite_code=${encodeURIComponent(invite)}` : "";
+    const resp = await fetch(`${API}/auth/telegram${qs}`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

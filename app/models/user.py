@@ -24,6 +24,13 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # Telegram chat ID for bot DM
 
+    # Access gate: a brand-new signup is approved instantly only if the owner
+    # (Settings.owner_telegram_id_set) created them or they supplied a valid
+    # invite code; otherwise they land here pending manual approval. Existing
+    # users predating this feature were backfilled to True by the migration —
+    # this never locks out someone already using the app.
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Bumped to invalidate every JWT already issued to this user (logout
     # everywhere / revoke on compromise). Each JWT carries the value it was
     # minted with as the "tv" claim; get_current_user rejects a mismatch.

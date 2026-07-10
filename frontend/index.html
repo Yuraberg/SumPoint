@@ -44,12 +44,42 @@
         <div id="magic-status" class="magic-status"></div>
       </div>
 
+      <details class="invite-details">
+        <summary>Есть код-приглашение?</summary>
+        <input id="invite-code-input" type="text" placeholder="AB12CD34" class="filter-input invite-input" autocomplete="off" maxlength="8" />
+        <p class="invite-hint">Код нужен только для мгновенного доступа при первом входе.</p>
+      </details>
+
       <div class="login-foot">
         <span>Вход защищён подписью Telegram.</span>
         <span class="login-credit">
           Сделано автором канала
           <a href="https://t.me/procpoint" target="_blank" rel="noopener">Точка закупки</a>
         </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pending approval -->
+  <section id="pending-screen" class="login-screen" style="display:none">
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="login-mark">S</span>
+        <span class="login-wordmark">SumPoint</span>
+      </div>
+      <div class="login-head">
+        <h1>⏳ Заявка на доступ отправлена</h1>
+        <p>Аккаунт создан, но доступ пока не подтверждён владельцем сервиса. Если у вас есть код-приглашение, введите его ниже — доступ откроется сразу.</p>
+      </div>
+      <div class="magic-link-section">
+        <div class="magic-link-row">
+          <input id="pending-invite-input" type="text" placeholder="Код-приглашение" class="magic-input" autocomplete="off" maxlength="8" style="padding-left:12px" />
+        </div>
+        <button id="pending-invite-btn" class="btn-magic">Активировать</button>
+        <div id="pending-status" class="magic-status"></div>
+      </div>
+      <div class="login-foot">
+        <button id="pending-logout-btn" class="sidebar-logout" style="margin:0 auto">Выйти</button>
       </div>
     </div>
   </section>
@@ -86,6 +116,9 @@
         </a>
         <a href="#" class="nav-item" data-page="channels">
           <span class="nav-icon">&#9432;</span> Каналы
+        </a>
+        <a href="#" class="nav-item" data-page="admin" id="nav-admin" style="display:none">
+          <span class="nav-icon">&#9906;</span> Доступ
         </a>
       </nav>
 
@@ -466,6 +499,29 @@
             </div>
           </div>
           <ul id="channels-list" class="channels-list"></ul>
+        </div>
+      </div>
+
+      <!-- ДОСТУП (только владелец) -->
+      <div class="page" id="page-admin">
+        <div class="page-header">
+          <h1 class="page-title">ДОСТУП</h1>
+          <p class="page-subtitle">Заявки на доступ и коды-приглашения</p>
+        </div>
+
+        <div class="admin-section">
+          <h2 class="stats-h2">Ожидают одобрения</h2>
+          <ul id="pending-users-list" class="channels-list"></ul>
+          <div id="pending-users-empty" class="table-message" style="display:none">Нет заявок в очереди.</div>
+        </div>
+
+        <div class="admin-section">
+          <div class="admin-section-head">
+            <h2 class="stats-h2">Коды-приглашения</h2>
+            <button id="create-invite-btn" class="btn-secondary">+ Создать код</button>
+          </div>
+          <ul id="invites-list" class="channels-list"></ul>
+          <div id="invites-empty" class="table-message" style="display:none">Кодов пока нет.</div>
         </div>
       </div>
 
