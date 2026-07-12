@@ -139,6 +139,14 @@ The following monitors should be configured in Uptime Kuma for full coverage:
 - **URL:** `https://<your-domain>`
 - **Alert when:** < 14 days until expiry
 
+### 4. Fetch pipeline freshness (HTTP monitor)
+- **Type:** HTTP(s)
+- **URL:** `https://<your-domain>/api/v1/health/fetch`
+- **Interval:** 300s (5 min)
+- **Retries:** 2
+- **Expected:** HTTP 200, JSON with `"status": "healthy"`
+- Checks the newest `Channel.last_fetched_at` across all channels — `fetch_all_channels` touches it every tick, on both success and failure, so a stale value (> 2x `POSTS_FETCH_INTERVAL_MINUTES`) means beat stopped scheduling ticks or the worker stopped picking them up, even though the worker heartbeat and API health check still look green. Added after a Docker restart on 2026-07-04 wedged the worker with no posts ingested for four days and nothing caught it.
+
 ### Notification channels
 Configure at least one notification channel (Telegram bot is recommended):
 - Uptime Kuma → Settings → Notifications → Telegram
