@@ -24,7 +24,9 @@ def test_mark_fetched_success_resets_counter():
 
 def test_mark_fetched_counts_real_failure():
     ch = _channel(error_count=2)
-    channel_repository.mark_fetched(ch, datetime(2026, 7, 1), error="entity gone", count_failure=True)
+    channel_repository.mark_fetched(
+        ch, datetime(2026, 7, 1), error="entity gone", count_failure=True, prev_error_count=2
+    )
     assert ch.error_count == 3
     assert ch.last_error == "entity gone"
 

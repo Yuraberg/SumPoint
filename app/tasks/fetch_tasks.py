@@ -104,12 +104,24 @@ async def _fetch_user_channels(
 ) -> int:
     """Fetch every channel for one user, pacing between calls. Returns the
     running channel counter so batch pauses stay global across users."""
-    ingestion = TelegramIngestion(user.id, user.session_path or "")
+    # Snapshot before any rollback can happen: db.rollback() expires every ORM
+    # object in the session, and under an async session reading an expired
+    # attribute afterward needs an implicit DB round-trip that can't happen
+    # outside `await` — it raises MissingGreenlet and takes down the whole
+    # tick (not just this channel/user) instead of just this iteration.
+    user_id = user.id
+    user_chat_id = user.chat_id
+
+    ingestion = TelegramIngestion(user_id, user.session_path or "")
     try:
         await ingestion.connect()
 
         for channel in channels:
             was_healthy = channel.last_error is None
+            prev_error_count = channel.error_count or 0
+            channel_title = channel.title
+            channel_telegram_id = channel.telegram_id
+            channel_was_active = channel.is_active
             try:
                 await _fetch_channel(db, ingestion, channel)
                 channel_repository.mark_fetched(channel, utcnow())
@@ -124,7 +136,7 @@ async def _fetch_user_channels(
                 logger.warning(
                     "Flood wait for user %s (%ss) on channel %s — stopping "
                     "this user's channels for this tick",
-                    user.id, e.seconds, channel.title,
+                    user_id, e.seconds, channel_title,
                 )
                 await _safe_rollback(db)
                 channel_repository.mark_fetched(
@@ -135,26 +147,31 @@ async def _fetch_user_channels(
             except Exception as e:
                 logger.warning(
                     "Skipping channel %s (%s): %s",
-                    channel.title, channel.telegram_id, str(e)[:200],
+                    channel_title, channel_telegram_id, str(e)[:200],
                 )
                 await _safe_rollback(db)
                 channel_repository.mark_fetched(
-                    channel, utcnow(), error=str(e), count_failure=True
+                    channel, utcnow(), error=str(e),
+                    count_failure=True, prev_error_count=prev_error_count,
                 )
                 # Too many consecutive failures → a permanently-broken channel
                 # (deleted/renamed, or a stale session). Deactivate so we stop
                 # spending Telethon calls on it; the user can re-enable it later.
+                new_error_count = prev_error_count + 1
                 deactivated = False
-                if channel.error_count >= AUTO_DEACTIVATE_AFTER_FAILURES and channel.is_active:
+                if new_error_count >= AUTO_DEACTIVATE_AFTER_FAILURES and channel_was_active:
                     channel.is_active = False
                     deactivated = True
                     logger.warning(
                         "Auto-deactivated channel %s (%s) after %d consecutive failures",
-                        channel.title, channel.telegram_id, channel.error_count,
+                        channel_title, channel_telegram_id, new_error_count,
                     )
                 await _safe_commit(db)
-                if user.chat_id and (deactivated or was_healthy):
-                    await _notify_channel_failure(user, channel, e, deactivated=deactivated)
+                if user_chat_id and (deactivated or was_healthy):
+                    await _notify_channel_failure(
+                        user_id, user_chat_id, channel_title, e, deactivated=deactivated,
+                        error_count=new_error_count,
+                    )
 
             channel_index += 1
             if channel_index % CHANNEL_BATCH_SIZE == 0:
@@ -162,7 +179,7 @@ async def _fetch_user_channels(
             else:
                 await asyncio.sleep(CHANNEL_FETCH_DELAY)
     except Exception as e:
-        logger.error("Error fetching for user %s: %s", user.id, str(e)[:200])
+        logger.error("Error fetching for user %s: %s", user_id, str(e)[:200])
         await _safe_rollback(db)
     finally:
         await ingestion.disconnect()
@@ -268,23 +285,29 @@ async def _notify_keyword_alerts(db, channel: Channel, post: Post) -> None:
 
 
 async def _notify_channel_failure(
-    user: User, channel: Channel, error: Exception, *, deactivated: bool = False
+    user_id: int,
+    user_chat_id: int,
+    channel_title: str,
+    error: Exception,
+    *,
+    deactivated: bool = False,
+    error_count: int = 0,
 ) -> None:
     if deactivated:
         text = (
-            f"🚫 Канал «{channel.title}» отключён после {channel.error_count} "
+            f"🚫 Канал «{channel_title}» отключён после {error_count} "
             f"неудачных попыток подряд: {str(error)[:160]}\n"
             "Проверьте, что канал существует и Telethon-сессия актуальна, "
             "затем включите его снова на странице «Каналы»."
         )
     else:
-        text = f"⚠️ Канал «{channel.title}» перестал обновляться: {str(error)[:200]}"
+        text = f"⚠️ Канал «{channel_title}» перестал обновляться: {str(error)[:200]}"
     try:
         async with get_bot() as bot:
-            await bot.send_message(chat_id=user.chat_id, text=text)
+            await bot.send_message(chat_id=user_chat_id, text=text)
     except Exception:
         logger.warning(
-            "Failed to notify user %s about channel %s failure", user.id, channel.id
+            "Failed to notify user %s about channel %s failure", user_id, channel_title
         )
 
 

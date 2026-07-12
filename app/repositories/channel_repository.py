@@ -70,6 +70,7 @@ def mark_fetched(
     *,
     error: str | None = None,
     count_failure: bool = False,
+    prev_error_count: int = 0,
 ) -> None:
     """Update fetch bookkeeping on a channel (caller commits).
 
@@ -78,10 +79,18 @@ def mark_fetched(
     increments it (used to auto-deactivate permanently-broken channels).
     Transient errors like flood waits pass ``count_failure=False`` so they
     don't push a healthy channel toward deactivation.
+
+    Callers that invoke this after a ``db.rollback()`` (e.g. in an
+    exception handler) must pass ``prev_error_count`` captured *before* the
+    rollback: rollback expires every ORM object in the session, and under
+    an async session reading an expired attribute needs an implicit
+    DB round-trip that can't happen outside ``await`` — reading
+    ``channel.error_count`` here directly would raise ``MissingGreenlet``
+    and take down the whole fetch tick, not just this channel.
     """
     channel.last_fetched_at = when
     channel.last_error = error[:1000] if error else None
     if error is None:
         channel.error_count = 0
     elif count_failure:
-        channel.error_count = (channel.error_count or 0) + 1
+        channel.error_count = prev_error_count + 1
