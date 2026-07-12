@@ -3,7 +3,7 @@ import logging
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
