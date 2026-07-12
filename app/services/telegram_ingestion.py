@@ -16,7 +16,7 @@ from typing import AsyncIterator
 
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
-from telethon.tl.types import Message, Channel as TLChannel
+from telethon.tl.types import Message, Channel as TLChannel, PeerChannel
 
 from app.config import get_settings
 from app.constants import AD_KEYWORDS, FETCH_HISTORY_HOURS, FETCH_MESSAGE_LIMIT
@@ -125,7 +125,12 @@ class TelegramIngestion:
         client = await self._get_client()
         cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
         fetched = 0
-        async for msg in client.iter_messages(channel_id, limit=FETCH_MESSAGE_LIMIT):
+        # A bare int ID is ambiguous to Telethon — without a type marker it
+        # defaults to treating it as a PeerUser and looks it up in the wrong
+        # entity cache, raising "Could not find the input entity for
+        # PeerUser(...)" even for a channel that's actually cached fine.
+        # Wrapping in PeerChannel disambiguates so it resolves correctly.
+        async for msg in client.iter_messages(PeerChannel(channel_id), limit=FETCH_MESSAGE_LIMIT):
             if not isinstance(msg, Message):
                 continue
             if msg.date < cutoff:
@@ -143,7 +148,7 @@ class TelegramIngestion:
         """Register a new-message handler for the given channels."""
         client = await self._get_client()
 
-        @client.on(events.NewMessage(chats=channel_ids))
+        @client.on(events.NewMessage(chats=[PeerChannel(cid) for cid in channel_ids]))
         async def handler(event):
             msg: Message = event.message
             post = self._process_message(msg)
