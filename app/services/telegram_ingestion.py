@@ -117,21 +117,38 @@ class TelegramIngestion:
     # ── Historical fetch ───────────────────────────────────────────────────────
 
     async def fetch_recent_posts(
-        self, channel_id: int, hours: int = FETCH_HISTORY_HOURS
+        self, channel_id: int, hours: int = FETCH_HISTORY_HOURS, username: str | None = None
     ) -> AsyncIterator[dict]:
         """Yield posts from the last `hours` hours, pre-filtered.
 
         Adds a 0.3s pause every 30 messages to avoid Telegram flood limits.
         """
         client = await self._get_client()
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
-        fetched = 0
         # A bare int ID is ambiguous to Telethon — without a type marker it
         # defaults to treating it as a PeerUser and looks it up in the wrong
         # entity cache, raising "Could not find the input entity for
         # PeerUser(...)" even for a channel that's actually cached fine.
         # Wrapping in PeerChannel disambiguates so it resolves correctly.
-        async for msg in client.iter_messages(PeerChannel(channel_id), limit=FETCH_MESSAGE_LIMIT):
+        peer = PeerChannel(channel_id)
+        try:
+            await client.get_input_entity(peer)
+        except ValueError:
+            # Not just ambiguous — genuinely never cached under any type in
+            # this session (e.g. added by raw ID without ever going through
+            # get_dialogs/get_entity). Re-resolving by @username re-populates
+            # Telethon's entity cache; use the resolved entity itself since
+            # iter_messages(PeerChannel(channel_id)) would just fail again.
+            if not username:
+                raise
+            logger.info(
+                "Entity cache miss for channel %s; re-resolving via @%s",
+                channel_id, username,
+            )
+            peer = await client.get_entity(username)
+
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+        fetched = 0
+        async for msg in client.iter_messages(peer, limit=FETCH_MESSAGE_LIMIT):
             if not isinstance(msg, Message):
                 continue
             if msg.date < cutoff:

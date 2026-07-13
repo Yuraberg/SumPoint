@@ -190,7 +190,7 @@ async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> 
     dedup_cutoff = utcnow() - timedelta(days=CONTENT_DEDUP_WINDOW_DAYS)
 
     async for raw_post in ingestion.fetch_recent_posts(
-        channel.telegram_id, hours=FETCH_HISTORY_HOURS
+        channel.telegram_id, hours=FETCH_HISTORY_HOURS, username=channel.username
     ):
         if raw_post["is_ad"]:
             continue
