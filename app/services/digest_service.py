@@ -1,4 +1,5 @@
 """Build daily digest from stored posts."""
+import logging
 from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,8 @@ from app.constants import DEFAULT_DIGEST_HOURS
 from app.repositories import post_repository
 from app.services.ai_engine import generate_digest_text
 from app.utils.time import utcnow
+
+logger = logging.getLogger(__name__)
 
 
 async def build_user_digest(
@@ -45,6 +48,16 @@ async def build_user_digest(
     ]
 
     digest_text = await generate_digest_text(summaries, model=model)
+    if not digest_text.strip():
+        # rows is non-empty here — an empty result means the AI call failed to
+        # produce a digest, not that there's nothing to report. Surfacing this
+        # as "Нет новых постов." would misinform the user that they're caught
+        # up when 400+ unread posts are sitting there; raise instead so the
+        # caller's error handling (and the next scheduled retry) kicks in.
+        logger.error(
+            "Digest generation returned empty text for user %s (%d posts)", user_id, len(rows)
+        )
+        raise RuntimeError("Digest generation failed: AI returned an empty response")
 
     all_events: list = []
     for row in rows:

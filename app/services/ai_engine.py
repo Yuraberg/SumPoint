@@ -114,10 +114,20 @@ async def answer_from_context(question: str, context: str, model: str | None = N
 
 
 async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
-    """Public entry point for digest assembly — keeps callers out of ``_call``."""
+    """Public entry point for digest assembly — keeps callers out of ``_call``.
+
+    DeepSeek occasionally returns a 200 with empty content for large digest
+    prompts (no exception, so ``_call``'s retries never kick in) — retry once
+    before giving up, since callers otherwise mistake this for "no posts".
+    """
     from app.prompts.summarization import build_digest_prompt
 
-    return await _call(build_digest_prompt(summaries), max_tokens=4096, model=model)
+    prompt = build_digest_prompt(summaries)
+    text = await _call(prompt, max_tokens=4096, model=model)
+    if not text.strip():
+        logger.warning("DeepSeek returned an empty digest (%d posts); retrying once", len(summaries))
+        text = await _call(prompt, max_tokens=4096, model=model)
+    return text
 
 
 async def classify_post(text: str) -> str:

@@ -25,7 +25,13 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         categories = sched.categories if (sched and sched.categories) else None
         model = sched.model if sched else None
 
-        digest = await build_user_digest(db, user_id, hours=hours, categories=categories, model=model)
+        try:
+            digest = await build_user_digest(db, user_id, hours=hours, categories=categories, model=model)
+        except Exception:
+            await query.edit_message_text(
+                "⚠️ Не удалось сформировать дайджест — сбой на стороне AI. Попробуйте ещё раз через пару минут."
+            )
+            return
 
     text = truncate(digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч.")
 
