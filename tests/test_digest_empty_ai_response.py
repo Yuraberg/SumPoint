@@ -36,9 +36,9 @@ async def test_build_user_digest_raises_when_posts_exist_but_ai_returns_empty():
     with (
         patch.object(digest_service.post_repository, "get_digest_feed", AsyncMock(return_value=[fake_row])),
         patch.object(digest_service, "generate_digest_text", AsyncMock(return_value="")),
+        pytest.raises(RuntimeError),
     ):
-        with pytest.raises(RuntimeError):
-            await digest_service.build_user_digest(db=None, user_id=1)
+        await digest_service.build_user_digest(db=None, user_id=1)
 
 
 async def test_build_user_digest_returns_none_markdown_when_no_posts():
