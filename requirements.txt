@@ -46,3 +46,6 @@ pytest-asyncio==1.4.0
 
 # ── Error tracking ─────────────────────────────────────────────────────────────
 sentry-sdk[fastapi]==2.*
+
+# ── Build tooling (pinned to satisfy pip-audit; not a direct runtime dep) ──────
+setuptools>=83.0.0  # PYSEC-2026-3447
