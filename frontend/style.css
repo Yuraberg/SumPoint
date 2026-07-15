@@ -322,6 +322,7 @@ body {
   white-space: nowrap;
 }
 
+.col-check   { width: 34px; text-align: center; }
 .col-channel { width: 175px; }
 .col-dots    { width: 40px; }
 .col-post    { }
@@ -333,6 +334,15 @@ body {
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
   overflow: hidden;
+}
+
+.cell-check {
+  text-align: center;
+}
+.cell-check input[type=checkbox],
+.col-check input[type=checkbox] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .posts-table tbody tr:last-child td { border-bottom: none; }
 
@@ -520,6 +530,7 @@ body {
   white-space: nowrap;
 }
 
+.evcol-check    { width: 34px; text-align: center; }
 .evcol-date     { width: 90px; }
 .evcol-name     { width: 220px; }
 .evcol-topics   { width: 170px; }
@@ -528,6 +539,15 @@ body {
 .evcol-speakers { width: 130px; }
 .evcol-partners { width: 130px; }
 .evcol-mentions { width: 60px; text-align: center; }
+
+.cell-evcheck {
+  text-align: center;
+}
+.cell-evcheck input[type=checkbox],
+.evcol-check input[type=checkbox] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 .events-table td {
   padding: 11px 14px;

@@ -215,6 +215,7 @@
           <table class="posts-table" id="posts-table">
             <thead>
               <tr>
+                <th class="col-check"><input type="checkbox" id="post-select-all" title="Выбрать все" /></th>
                 <th class="col-channel" data-col="channel">КАНАЛ</th>
                 <th class="col-dots" data-col="dots">О</th>
                 <th class="col-post" data-col="post">ПОСТ</th>
@@ -291,12 +292,16 @@
           </div>
           <button id="ev-reset-btn" class="btn-ghost-sm">Сбросить</button>
           <button id="ev-ics-btn" class="btn-ghost-sm">📅 Экспорт .ics</button>
+          <div class="filter-search">
+            <input type="text" id="ev-search-input" placeholder="Поиск по событиям..." class="filter-input search-input" />
+          </div>
         </div>
 
         <div class="table-container">
           <table class="events-table" id="events-table">
             <thead>
               <tr>
+                <th class="evcol-check"><input type="checkbox" id="ev-select-all" title="Выбрать все" /></th>
                 <th class="evcol-date" data-col="date">ДАТА</th>
                 <th class="evcol-name" data-col="name">НАЗВАНИЕ</th>
                 <th class="evcol-topics" data-col="topics">ТЕМЫ</th>
