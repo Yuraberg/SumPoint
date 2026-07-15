@@ -10,7 +10,10 @@ let isMiniApp = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.
 let filters = { dateFrom: "", dateTo: "", category: "", channelId: "", unreadOnly: false };
 let density = localStorage.getItem("sp_density") || "medium";
 let lastPosts = [];
+let selectedPostIds = new Set();  // ids of checked posts, for selective export
 let lastEvents = [];
+let allLoadedEvents = [];  // events after server + topic filters, before the free-text search filter
+let selectedEventKeys = new Set();  // keys (name+date+idx) of checked events, for selective .ics export
 
 // Feed pagination / infinite-scroll state. searchMode disables paging because
 // search returns a single fixed result set, not an offset-able feed.
@@ -421,6 +424,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ev-date-to").addEventListener("change", loadEvents);
   document.getElementById("ev-filter-topic").addEventListener("change", loadEvents);
   document.getElementById("ev-filter-type").addEventListener("change", loadEvents);
+  document.getElementById("ev-search-input").addEventListener("input", applyEventSearch);
+  document.getElementById("ev-select-all").addEventListener("change", toggleAllEventsSelected);
   document.getElementById("ev-reset-btn").addEventListener("click", resetEventFilters);
   document.getElementById("ev-ics-btn").addEventListener("click", exportEventsIcs);
 
@@ -438,6 +443,7 @@ document.addEventListener("DOMContentLoaded", () => {
     loadFeed();
   });
   document.getElementById("mark-all-read-btn").addEventListener("click", markAllRead);
+  document.getElementById("post-select-all").addEventListener("change", toggleAllPostsSelected);
 
   const exportBtn = document.getElementById("export-btn");
   if (exportBtn) exportBtn.addEventListener("click", e => {
@@ -710,6 +716,13 @@ function buildFeedUrl(offset) {
 }
 
 async function exportPosts(format) {
+  // If the user checked specific posts, export just those (client-side, from
+  // what's already loaded) instead of hitting the server for the whole filtered feed.
+  if (selectedPostIds.size > 0) {
+    exportSelectedPosts(format);
+    return;
+  }
+
   let url = `/posts/export?format=${format}`;
   if (filters.category) url += `&category=${encodeURIComponent(filters.category)}`;
   if (filters.channelId) url += `&channel_id=${filters.channelId}`;
@@ -736,6 +749,80 @@ async function exportPosts(format) {
   }
 }
 
+// Client-side export of just the checked posts, mirroring the columns of the
+// server-side /posts/export endpoint (which has no way to filter by post id).
+function _csvField(v) {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function _postExportRecord(post) {
+  const username = post.channel_username;
+  return {
+    id: post.id,
+    published_at: post.published_at || "",
+    channel_title: post.channel_title || "",
+    channel_username: username || "",
+    category: post.category || "",
+    is_read: !!post.is_read,
+    cluster_size: Math.max(post.cluster_size || 1, 1),
+    summary: post.summary || "",
+    text: post.text || "",
+    telegram_url: username ? `https://t.me/${username}/${post.telegram_message_id}` : "",
+  };
+}
+
+function exportSelectedPosts(format) {
+  const posts = lastPosts.filter(p => selectedPostIds.has(p.id));
+  if (posts.length === 0) {
+    toast("Нет выбранных постов для экспорта", "error");
+    return;
+  }
+  const records = posts.map(_postExportRecord);
+  const columns = ["id", "published_at", "channel_title", "channel_username",
+    "category", "is_read", "cluster_size", "summary", "text", "telegram_url"];
+
+  let body, media;
+  if (format === "json") {
+    body = JSON.stringify(records, null, 2);
+    media = "application/json";
+  } else {
+    const lines = [columns.join(",")];
+    records.forEach(r => lines.push(columns.map(c => _csvField(r[c])).join(",")));
+    body = lines.join("\r\n");
+    media = "text/csv";
+  }
+
+  const blob = new Blob([body], { type: `${media};charset=utf-8` });
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objUrl;
+  a.download = `sumpoint-posts.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objUrl);
+  toast(`Экспортировано постов: ${records.length}`, "success");
+}
+
+function toggleAllPostsSelected(e) {
+  const checked = e.target.checked;
+  lastPosts.forEach(post => {
+    if (checked) selectedPostIds.add(post.id);
+    else selectedPostIds.delete(post.id);
+  });
+  document.querySelectorAll(".post-row-check").forEach(cb => { cb.checked = checked; });
+}
+
+function updatePostsSelectAllState() {
+  const selectAll = document.getElementById("post-select-all");
+  if (!selectAll) return;
+  const ids = lastPosts.map(p => p.id);
+  const selectedVisible = ids.filter(id => selectedPostIds.has(id));
+  selectAll.checked = ids.length > 0 && selectedVisible.length === ids.length;
+  selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < ids.length;
+}
+
 function showSkeletons(n = 6) {
   const tbody = document.getElementById("posts-tbody");
   const widths = ["70%", "90%", "60%", "80%", "75%", "85%"];
@@ -744,6 +831,7 @@ function showSkeletons(n = 6) {
     const tr = document.createElement("tr");
     tr.className = "skeleton-row";
     tr.innerHTML = `
+      <td><div class="skeleton-bar" style="width:16px"></div></td>
       <td><div class="skeleton-bar" style="width:80%"></div></td>
       <td><div class="skeleton-bar" style="width:16px"></div></td>
       <td><div class="skeleton-bar" style="width:${widths[i % widths.length]}"></div></td>
@@ -762,6 +850,8 @@ async function loadFeed(overrideRows = null) {
 
   feed = { offset: 0, loading: false, done: false, searchMode: !!overrideRows };
   kbIndex = -1;
+  selectedPostIds.clear();
+  updatePostsSelectAllState();
 
   if (overrideRows) {
     lastPosts = overrideRows;
@@ -787,7 +877,7 @@ async function loadFeed(overrideRows = null) {
     feed.done = data.length < FEED_PAGE;
     ensureFeedObserver();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="table-message">Ошибка загрузки: ${escHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="table-message">Ошибка загрузки: ${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -839,6 +929,7 @@ function appendPosts(data) {
     tbody.appendChild(mainRow);
     tbody.appendChild(detailRow);
   });
+  updatePostsSelectAllState();
 }
 
 function renderPostRow(post) {
@@ -869,12 +960,21 @@ function renderPostRow(post) {
   const mainRow = document.createElement("tr");
   mainRow.className = "data-row" + (post.is_read ? " is-read" : "");
   mainRow.innerHTML = `
+    <td class="cell-check"><input type="checkbox" class="post-row-check" ${selectedPostIds.has(post.id) ? "checked" : ""} /></td>
     <td class="cell-channel" title="${escHtml(channelName)}">${escHtml(channelShort)}</td>
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
     <td class="cell-post" title="${escHtml(rawText.slice(0, 300))}">${escHtml(preview)}</td>
     <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(post.category)}</span>` : ""}${dupBadge}</td>
     <td class="cell-date">${simBadge} ${date}</td>
   `;
+
+  const checkCell = mainRow.querySelector(".cell-check");
+  checkCell.addEventListener("click", e => e.stopPropagation());
+  mainRow.querySelector(".post-row-check").addEventListener("change", e => {
+    if (e.target.checked) selectedPostIds.add(post.id);
+    else selectedPostIds.delete(post.id);
+    updatePostsSelectAllState();
+  });
 
   const badgeEl = mainRow.querySelector(".dup-badge");
   if (badgeEl) {
@@ -901,7 +1001,7 @@ function renderPostRow(post) {
   const safeTgLink = sanitizeUrl(tgLink);
   const linkBlock = safeTgLink ? `<a class="detail-link" href="${escHtml(safeTgLink)}" target="_blank" rel="noopener">→ Открыть в Telegram</a>` : "";
 
-  detailRow.innerHTML = `<td colspan="5"><div class="detail-inner">${summaryBlock}${originalBlock}${linkBlock}</div></td>`;
+  detailRow.innerHTML = `<td colspan="6"><div class="detail-inner">${summaryBlock}${originalBlock}${linkBlock}</div></td>`;
 
   if (density === "expanded") {
     mainRow.classList.add("expanded");
@@ -1222,6 +1322,7 @@ function resetEventFilters() {
   document.getElementById("ev-date-to").value = "";
   document.getElementById("ev-filter-topic").value = "";
   document.getElementById("ev-filter-type").value = "";
+  document.getElementById("ev-search-input").value = "";
   loadEvents();
 }
 
@@ -1257,25 +1358,74 @@ async function loadEvents() {
       });
     }
 
-    lastEvents = events;  // what's currently shown — the .ics export uses this
-
-    if (events.length === 0) {
-      noEvEl.style.display = "block";
-      return;
-    }
+    // Assign a stable per-load key so checkboxes survive re-renders from the search box.
+    events.forEach((ev, i) => { ev._evKey = `${i}:${ev.name || ""}:${ev.date || ""}`; });
+    allLoadedEvents = events;
+    selectedEventKeys.clear();
 
     // Populate topic dropdown from loaded events (first load only)
     populateTopicsDropdown(data.events || []);
 
-    events.forEach(ev => {
-      const { mainRow, detailRow } = renderEventRow(ev);
-      tbody.appendChild(mainRow);
-      tbody.appendChild(detailRow);
-    });
+    applyEventSearch();
   } catch (e) {
     loader.style.display = "none";
-    tbody.innerHTML = `<tr><td colspan="8" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
   }
+}
+
+// Free-text client-side search over the already-loaded/filtered events, plus
+// re-render (the events endpoint has no server-side text search like /posts/search).
+function applyEventSearch() {
+  const tbody = document.getElementById("events-tbody");
+  const noEvEl = document.getElementById("no-events");
+  if (!tbody) return;
+
+  const q = document.getElementById("ev-search-input").value.trim().toLowerCase();
+  let events = allLoadedEvents;
+  if (q) {
+    events = events.filter(ev => {
+      const haystack = [
+        ev.name, ev.location, ev.channel_title,
+        ...(ev.topics || []), ...(ev.speakers || []), ...(ev.partners || []),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  lastEvents = events;  // what's currently shown — the .ics export uses this
+  tbody.innerHTML = "";
+
+  if (events.length === 0) {
+    noEvEl.style.display = "block";
+    updateEventsSelectAllState();
+    return;
+  }
+  noEvEl.style.display = "none";
+
+  events.forEach(ev => {
+    const { mainRow, detailRow } = renderEventRow(ev);
+    tbody.appendChild(mainRow);
+    tbody.appendChild(detailRow);
+  });
+  updateEventsSelectAllState();
+}
+
+function toggleAllEventsSelected(e) {
+  const checked = e.target.checked;
+  lastEvents.forEach(ev => {
+    if (checked) selectedEventKeys.add(ev._evKey);
+    else selectedEventKeys.delete(ev._evKey);
+  });
+  document.querySelectorAll(".ev-row-check").forEach(cb => { cb.checked = checked; });
+}
+
+function updateEventsSelectAllState() {
+  const selectAll = document.getElementById("ev-select-all");
+  if (!selectAll) return;
+  const visibleKeys = lastEvents.map(ev => ev._evKey);
+  const selectedVisible = visibleKeys.filter(k => selectedEventKeys.has(k));
+  selectAll.checked = visibleKeys.length > 0 && selectedVisible.length === visibleKeys.length;
+  selectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < visibleKeys.length;
 }
 
 // ── Export events to an .ics calendar file ────────────────────────────────────
@@ -1335,7 +1485,10 @@ function exportEventsIcs() {
     toast("Нет событий для экспорта", "error");
     return;
   }
-  const { text, count } = buildIcs(lastEvents);
+  // Export just the checked events if any are checked, otherwise everything currently shown.
+  const selected = lastEvents.filter(ev => selectedEventKeys.has(ev._evKey));
+  const toExport = selected.length > 0 ? selected : lastEvents;
+  const { text, count } = buildIcs(toExport);
   if (count === 0) {
     toast("У событий нет распознанных дат", "error");
     return;
@@ -1384,6 +1537,7 @@ function renderEventRow(ev) {
   const mainRow = document.createElement("tr");
   mainRow.className = "data-row";
   mainRow.innerHTML = `
+    <td class="cell-evcheck"><input type="checkbox" class="ev-row-check" ${selectedEventKeys.has(ev._evKey) ? "checked" : ""} /></td>
     <td class="cell-evdate">${dateStr}${timeStr ? `<br><span class="ev-time">${timeStr}</span>` : ""}</td>
     <td class="cell-evname">
       <span class="ev-expand-icon">&#9660;</span>
@@ -1397,6 +1551,14 @@ function renderEventRow(ev) {
     <td class="cell-evmentions">${mentions}</td>
   `;
 
+  const checkCell = mainRow.querySelector(".cell-evcheck");
+  checkCell.addEventListener("click", e => e.stopPropagation());
+  mainRow.querySelector(".ev-row-check").addEventListener("change", e => {
+    if (e.target.checked) selectedEventKeys.add(ev._evKey);
+    else selectedEventKeys.delete(ev._evKey);
+    updateEventsSelectAllState();
+  });
+
   const detailRow = document.createElement("tr");
   detailRow.className = "detail-row";
   const channelInfo = ev.channel_title ? `<b>${escHtml(ev.channel_title)}</b>` : "";
@@ -1408,7 +1570,7 @@ function renderEventRow(ev) {
   const linkBlock = safeEvLink
     ? `<a class="detail-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">→ Подробнее</a>` : "";
 
-  detailRow.innerHTML = `<td colspan="8"><div class="detail-inner ev-detail-inner">
+  detailRow.innerHTML = `<td colspan="9"><div class="detail-inner ev-detail-inner">
     <div style="display:flex;gap:24px;flex-wrap:wrap">
       ${channelInfo ? `<div><div class="detail-label">Канал</div><div>${channelInfo}</div></div>` : ""}
       ${ev.location ? `<div><div class="detail-label">Место</div><div>${escHtml(ev.location)}</div></div>` : ""}
