@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,6 +10,8 @@
 </head>
 <body>
 
+  <button id="lang-btn" class="lang-toggle-btn" title="Switch language / Сменить язык">RU</button>
+
   <!-- Login -->
   <section id="login-screen" class="login-screen" style="display:none">
     <div class="login-card">
@@ -19,41 +21,41 @@
       </div>
 
       <div class="login-head">
-        <h1>Ваши Telegram-каналы — в одной умной ленте</h1>
-        <p>ИИ-сводки, семантический поиск и дайджесты. Войдите через Telegram, чтобы начать.</p>
+        <h1 data-i18n="login.headline">Your Telegram channels — in one smart feed</h1>
+        <p data-i18n="login.sub">AI summaries, semantic search and digests. Sign in with Telegram to get started.</p>
       </div>
 
       <!-- Telegram Login Widget (requires oauth.telegram.org) -->
       <div id="telegram-widget-container" class="login-widget"></div>
 
-      <div class="login-divider"><span>или по ссылке</span></div>
+      <div class="login-divider"><span data-i18n="login.divider">or by link</span></div>
 
       <!-- Magic Link form (works without oauth.telegram.org) -->
       <div class="magic-link-section">
-        <label class="magic-label" for="magic-username">Вход по ссылке через бота</label>
+        <label class="magic-label" for="magic-username" data-i18n="login.magicLabel">Sign in via a bot link</label>
         <div class="magic-link-row">
           <span class="magic-at">@</span>
           <input id="magic-username" type="text" placeholder="username" class="magic-input" autocomplete="off" />
         </div>
-        <button id="magic-btn" class="btn-magic">Получить ссылку в Telegram</button>
+        <button id="magic-btn" class="btn-magic" data-i18n="login.magicBtn">Get a Telegram link</button>
         <p class="magic-link-hint">
-          Сначала напишите <code>/start</code> боту
+          <span data-i18n="login.magicHintPrefix">First message</span> <code>/start</code>
           <a id="bot-link" href="#" target="_blank" rel="noopener">@<span id="bot-username"></span></a>
-          — затем пришлём одноразовую ссылку для входа.
+          <span data-i18n="login.magicHintSuffix">— then we'll send a one-time sign-in link.</span>
         </p>
         <div id="magic-status" class="magic-status"></div>
       </div>
 
       <details class="invite-details">
-        <summary>Есть код-приглашение?</summary>
+        <summary data-i18n="login.inviteSummary">Have an invite code?</summary>
         <input id="invite-code-input" type="text" placeholder="AB12CD34" class="filter-input invite-input" autocomplete="off" maxlength="8" />
-        <p class="invite-hint">Код нужен только для мгновенного доступа при первом входе.</p>
+        <p class="invite-hint" data-i18n="login.inviteHint">The code is only needed for instant access on first sign-in.</p>
       </details>
 
       <div class="login-foot">
-        <span>Вход защищён подписью Telegram.</span>
+        <span data-i18n="login.footSecured">Sign-in is secured by Telegram's signature.</span>
         <span class="login-credit">
-          Сделано автором канала
+          <span data-i18n="login.footCredit">Made by the author of</span>
           <a href="https://t.me/procpoint" target="_blank" rel="noopener">Точка закупки</a>
         </span>
       </div>
@@ -68,18 +70,18 @@
         <span class="login-wordmark">SumPoint</span>
       </div>
       <div class="login-head">
-        <h1>⏳ Заявка на доступ отправлена</h1>
-        <p>Аккаунт создан, но доступ пока не подтверждён владельцем сервиса. Если у вас есть код-приглашение, введите его ниже — доступ откроется сразу.</p>
+        <h1 data-i18n="pending.title">⏳ Access request sent</h1>
+        <p data-i18n="pending.body">Your account was created, but access hasn't been approved by the service owner yet. If you have an invite code, enter it below to unlock access instantly.</p>
       </div>
       <div class="magic-link-section">
         <div class="magic-link-row">
-          <input id="pending-invite-input" type="text" placeholder="Код-приглашение" class="magic-input" autocomplete="off" maxlength="8" style="padding-left:12px" />
+          <input id="pending-invite-input" type="text" placeholder="Invite code" data-i18n-placeholder="pending.inputPlaceholder" class="magic-input" autocomplete="off" maxlength="8" style="padding-left:12px" />
         </div>
-        <button id="pending-invite-btn" class="btn-magic">Активировать</button>
+        <button id="pending-invite-btn" class="btn-magic" data-i18n="pending.activate">Activate</button>
         <div id="pending-status" class="magic-status"></div>
       </div>
       <div class="login-foot">
-        <button id="pending-logout-btn" class="sidebar-logout" style="margin:0 auto">Выйти</button>
+        <button id="pending-logout-btn" class="sidebar-logout" style="margin:0 auto" data-i18n="pending.logout">Sign out</button>
       </div>
     </div>
   </section>
@@ -92,42 +94,42 @@
       <div class="sidebar-logo">SumPoint</div>
 
       <nav class="sidebar-nav">
-        <div class="nav-section-label">Инфополе</div>
+        <div class="nav-section-label" data-i18n="nav.section.field">Feed</div>
         <a href="#" class="nav-item" data-page="posts">
-          <span class="nav-icon">&#9783;</span> Посты
+          <span class="nav-icon">&#9783;</span> <span data-i18n="nav.posts">Posts</span>
           <span id="unread-badge" class="unread-badge" style="display:none">0</span>
         </a>
         <a href="#" class="nav-item" data-page="digest">
-          <span class="nav-icon">&#9776;</span> Сводки
+          <span class="nav-icon">&#9776;</span> <span data-i18n="nav.digest">Digests</span>
         </a>
         <a href="#" class="nav-item" data-page="events">
-          <span class="nav-icon">&#9737;</span> События
+          <span class="nav-icon">&#9737;</span> <span data-i18n="nav.events">Events</span>
         </a>
         <a href="#" class="nav-item" data-page="stats">
-          <span class="nav-icon">&#9202;</span> Статистика
+          <span class="nav-icon">&#9202;</span> <span data-i18n="nav.stats">Statistics</span>
         </a>
         <a href="#" class="nav-item" data-page="chat">
-          <span class="nav-icon">&#9993;</span> Ассистент
+          <span class="nav-icon">&#9993;</span> <span data-i18n="nav.chat">Assistant</span>
         </a>
 
-        <div class="nav-section-label" style="margin-top:16px">Управление</div>
+        <div class="nav-section-label" style="margin-top:16px" data-i18n="nav.section.manage">Manage</div>
         <a href="#" class="nav-item" data-page="schedule">
-          <span class="nav-icon">&#9201;</span> Расписание
+          <span class="nav-icon">&#9201;</span> <span data-i18n="nav.schedule">Schedule</span>
         </a>
         <a href="#" class="nav-item" data-page="channels">
-          <span class="nav-icon">&#9432;</span> Каналы
+          <span class="nav-icon">&#9432;</span> <span data-i18n="nav.channels">Channels</span>
         </a>
         <a href="#" class="nav-item" data-page="admin" id="nav-admin" style="display:none">
-          <span class="nav-icon">&#9906;</span> Доступ
+          <span class="nav-icon">&#9906;</span> <span data-i18n="nav.admin">Access</span>
         </a>
       </nav>
 
       <div class="sidebar-footer">
         <div id="sidebar-user" class="sidebar-user"></div>
-        <button id="theme-btn" class="sidebar-theme">🌙 Тёмная тема</button>
-        <button id="logout-btn" class="sidebar-logout">Выйти</button>
-        <a class="sidebar-credit" href="https://t.me/procpoint" target="_blank" rel="noopener">
-          Автор — «Точка закупки» ↗
+        <button id="theme-btn" class="sidebar-theme">🌙 Dark theme</button>
+        <button id="logout-btn" class="sidebar-logout" data-i18n="sidebar.logout">Sign out</button>
+        <a class="sidebar-credit" href="https://t.me/procpoint" target="_blank" rel="noopener" data-i18n="sidebar.credit">
+          Author — “Точка закупки” ↗
         </a>
       </div>
     </aside>
@@ -135,28 +137,28 @@
     <!-- Main -->
     <main class="main-content">
 
-      <!-- ПОСТЫ -->
+      <!-- POSTS -->
       <div class="page" id="page-posts">
         <div class="page-header">
           <div>
-            <h1 class="page-title">ПОСТЫ</h1>
-            <p class="page-subtitle">Все собранные посты из Telegram-каналов</p>
+            <h1 class="page-title" data-i18n="posts.title">POSTS</h1>
+            <p class="page-subtitle" data-i18n="posts.subtitle">All posts collected from Telegram channels</p>
           </div>
         </div>
 
         <div class="filters-bar">
           <div class="filter-group">
-            <label>ДАТА ОТ</label>
+            <label data-i18n="filter.dateFrom">DATE FROM</label>
             <input type="date" id="filter-date-from" class="filter-input" />
           </div>
           <div class="filter-group">
-            <label>ДАТА ДО</label>
+            <label data-i18n="filter.dateTo">DATE TO</label>
             <input type="date" id="filter-date-to" class="filter-input" />
           </div>
           <div class="filter-group">
-            <label>ТЕМЫ</label>
+            <label data-i18n="filter.topics">TOPICS</label>
             <select id="filter-category" class="filter-select">
-              <option value="">Все темы</option>
+              <option value="" data-i18n="filter.allTopics">All topics</option>
               <option value="Технологии">Технологии</option>
               <option value="Разработка">Разработка</option>
               <option value="Бизнес">Бизнес</option>
@@ -174,31 +176,31 @@
             </select>
           </div>
           <div class="filter-group">
-            <label>КАНАЛЫ</label>
+            <label data-i18n="filter.channels">CHANNELS</label>
             <select id="filter-channel" class="filter-select">
-              <option value="">Все каналы</option>
+              <option value="" data-i18n="filter.allChannels">All channels</option>
             </select>
           </div>
           <div class="filter-group">
-            <label>ВИД</label>
+            <label data-i18n="filter.view">VIEW</label>
             <div class="density-toggle" id="density-toggle">
-              <button class="density-btn" data-density="compact">Кратко</button>
-              <button class="density-btn active" data-density="medium">Средне</button>
-              <button class="density-btn" data-density="expanded">Расширенно</button>
+              <button class="density-btn" data-density="compact" data-i18n="density.compact">Compact</button>
+              <button class="density-btn active" data-density="medium" data-i18n="density.medium">Medium</button>
+              <button class="density-btn" data-density="expanded" data-i18n="density.expanded">Expanded</button>
             </div>
           </div>
           <div class="filter-group">
             <label>&nbsp;</label>
-            <label class="unread-check"><input type="checkbox" id="unread-only" /> Непрочитанные</label>
+            <label class="unread-check"><input type="checkbox" id="unread-only" /> <span data-i18n="filter.unreadOnly">Unread only</span></label>
           </div>
           <div class="filter-group">
             <label>&nbsp;</label>
-            <button id="mark-all-read-btn" class="btn-ghost-sm" style="height:34px">Прочитать всё</button>
+            <button id="mark-all-read-btn" class="btn-ghost-sm" style="height:34px" data-i18n="posts.markAllRead">Mark all read</button>
           </div>
           <div class="filter-group">
             <label>&nbsp;</label>
             <div class="export-wrap">
-              <button id="export-btn" class="btn-ghost-sm" style="height:34px">Экспорт ▾</button>
+              <button id="export-btn" class="btn-ghost-sm" style="height:34px" data-i18n="posts.export">Export ▾</button>
               <div id="export-menu" class="export-menu" style="display:none">
                 <button data-format="csv">CSV</button>
                 <button data-format="json">JSON</button>
@@ -206,8 +208,8 @@
             </div>
           </div>
           <div class="filter-search">
-            <input type="text" id="search-input" placeholder="Поиск..." class="filter-input search-input" />
-            <button id="search-btn" class="btn-search">Найти</button>
+            <input type="text" id="search-input" placeholder="Search…" data-i18n-placeholder="posts.searchPlaceholder" class="filter-input search-input" />
+            <button id="search-btn" class="btn-search" data-i18n="posts.search">Search</button>
           </div>
         </div>
 
@@ -215,67 +217,67 @@
           <table class="posts-table" id="posts-table">
             <thead>
               <tr>
-                <th class="col-check"><input type="checkbox" id="post-select-all" title="Выбрать все" /></th>
-                <th class="col-channel" data-col="channel">КАНАЛ</th>
-                <th class="col-dots" data-col="dots">О</th>
-                <th class="col-post" data-col="post">ПОСТ</th>
-                <th class="col-topics" data-col="topics">ТЕМЫ</th>
-                <th class="col-date" data-col="date">ДАТА</th>
+                <th class="col-check"><input type="checkbox" id="post-select-all" title="Select all" data-i18n-title="posts.selectAll" /></th>
+                <th class="col-channel" data-col="channel" data-i18n="col.channel">CHANNEL</th>
+                <th class="col-dots" data-col="dots" data-i18n="col.about">?</th>
+                <th class="col-post" data-col="post" data-i18n="col.post">POST</th>
+                <th class="col-topics" data-col="topics" data-i18n="col.topics">TOPICS</th>
+                <th class="col-date" data-col="date" data-i18n="col.date">DATE</th>
               </tr>
             </thead>
             <tbody id="posts-tbody"></tbody>
           </table>
-          <div id="feed-loader" class="table-message" style="display:none">Загрузка…</div>
-          <div id="feed-more" class="table-message" style="display:none">Загрузка ещё…</div>
-          <div id="no-posts" class="table-message" style="display:none">
-            Нет постов. Добавьте каналы и нажмите «Синхронизировать» на странице Каналы.
+          <div id="feed-loader" class="table-message" style="display:none" data-i18n="common.loading">Loading…</div>
+          <div id="feed-more" class="table-message" style="display:none" data-i18n="common.loadingMore">Loading more…</div>
+          <div id="no-posts" class="table-message" style="display:none" data-i18n="posts.empty">
+            No posts. Add channels and click “Sync” on the Channels page.
           </div>
           <div id="feed-sentinel" style="height:1px"></div>
         </div>
-        <div class="kbd-hint">
-          Навигация: <kbd>j</kbd>/<kbd>k</kbd> — по постам, <kbd>o</kbd>/<kbd>Enter</kbd> — раскрыть,
-          <kbd>/</kbd> — поиск, <kbd>Esc</kbd> — закрыть.
+        <div class="kbd-hint" data-i18n-html="posts.kbdHint">
+          Navigation: <kbd>j</kbd>/<kbd>k</kbd> — through posts, <kbd>o</kbd>/<kbd>Enter</kbd> — expand,
+          <kbd>/</kbd> — search, <kbd>Esc</kbd> — close.
         </div>
       </div>
 
-      <!-- СВОДКИ -->
+      <!-- DIGESTS -->
       <div class="page" id="page-digest">
         <div class="page-header">
-          <h1 class="page-title">СВОДКИ</h1>
-          <p class="page-subtitle">Ежедневный дайджест ваших каналов</p>
+          <h1 class="page-title" data-i18n="digest.title">DIGESTS</h1>
+          <p class="page-subtitle" data-i18n="digest.subtitle">Daily digest of your channels</p>
         </div>
         <div class="digest-page">
-          <button id="gen-digest-btn" class="btn-primary">Сгенерировать сводку</button>
+          <button id="gen-digest-btn" class="btn-primary" data-i18n="digest.generate">Generate digest</button>
           <div id="digest-box" class="digest-box" style="display:none"></div>
         </div>
       </div>
 
-      <!-- СОБЫТИЯ -->
+      <!-- EVENTS -->
       <div class="page" id="page-events">
         <div class="page-header">
-          <h1 class="page-title">СОБЫТИЯ</h1>
-          <p class="page-subtitle">События, найденные в Telegram-каналах</p>
+          <h1 class="page-title" data-i18n="events.title">EVENTS</h1>
+          <p class="page-subtitle" data-i18n="events.subtitle">Events found across your Telegram channels</p>
         </div>
 
         <div class="filters-bar">
           <div class="filter-group">
-            <label>ДАТА ОТ</label>
+            <label data-i18n="filter.dateFrom">DATE FROM</label>
             <input type="date" id="ev-date-from" class="filter-input" />
           </div>
           <div class="filter-group">
-            <label>ДАТА ДО</label>
+            <label data-i18n="filter.dateTo">DATE TO</label>
             <input type="date" id="ev-date-to" class="filter-input" />
           </div>
           <div class="filter-group">
-            <label>ТЕМЫ</label>
+            <label data-i18n="filter.topics">TOPICS</label>
             <select id="ev-filter-topic" class="filter-select">
-              <option value="">Все темы</option>
+              <option value="" data-i18n="filter.allTopics">All topics</option>
             </select>
           </div>
           <div class="filter-group">
-            <label>ТИП СОБЫТИЯ</label>
+            <label data-i18n="filter.eventType">EVENT TYPE</label>
             <select id="ev-filter-type" class="filter-select">
-              <option value="">Все типы</option>
+              <option value="" data-i18n="filter.allTypes">All types</option>
               <option value="конференция">Конференция</option>
               <option value="митап">Митап</option>
               <option value="вебинар">Вебинар</option>
@@ -290,10 +292,10 @@
               <option value="другое">Другое</option>
             </select>
           </div>
-          <button id="ev-reset-btn" class="btn-ghost-sm">Сбросить</button>
-          <button id="ev-ics-btn" class="btn-ghost-sm">📅 Экспорт .ics</button>
+          <button id="ev-reset-btn" class="btn-ghost-sm" data-i18n="events.reset">Reset</button>
+          <button id="ev-ics-btn" class="btn-ghost-sm" data-i18n="events.exportIcs">📅 Export .ics</button>
           <div class="filter-search">
-            <input type="text" id="ev-search-input" placeholder="Поиск по событиям..." class="filter-input search-input" />
+            <input type="text" id="ev-search-input" placeholder="Search events…" data-i18n-placeholder="events.searchPlaceholder" class="filter-input search-input" />
           </div>
         </div>
 
@@ -301,109 +303,109 @@
           <table class="events-table" id="events-table">
             <thead>
               <tr>
-                <th class="evcol-check"><input type="checkbox" id="ev-select-all" title="Выбрать все" /></th>
-                <th class="evcol-date" data-col="date">ДАТА</th>
-                <th class="evcol-name" data-col="name">НАЗВАНИЕ</th>
-                <th class="evcol-topics" data-col="topics">ТЕМЫ</th>
-                <th class="evcol-type" data-col="type">ТИП</th>
-                <th class="evcol-location" data-col="location">МЕСТО</th>
-                <th class="evcol-speakers" data-col="speakers">СПИКЕРЫ</th>
-                <th class="evcol-partners" data-col="partners">ПАРТНЁРЫ</th>
-                <th class="evcol-mentions" data-col="mentions">УПОМИНАНИЯ</th>
+                <th class="evcol-check"><input type="checkbox" id="ev-select-all" title="Select all" data-i18n-title="posts.selectAll" /></th>
+                <th class="evcol-date" data-col="date" data-i18n="col.date">DATE</th>
+                <th class="evcol-name" data-col="name" data-i18n="col.name">NAME</th>
+                <th class="evcol-topics" data-col="topics" data-i18n="col.topics">TOPICS</th>
+                <th class="evcol-type" data-col="type" data-i18n="col.type">TYPE</th>
+                <th class="evcol-location" data-col="location" data-i18n="col.location">LOCATION</th>
+                <th class="evcol-speakers" data-col="speakers" data-i18n="col.speakers">SPEAKERS</th>
+                <th class="evcol-partners" data-col="partners" data-i18n="col.partners">PARTNERS</th>
+                <th class="evcol-mentions" data-col="mentions" data-i18n="col.mentions">MENTIONS</th>
               </tr>
             </thead>
             <tbody id="events-tbody"></tbody>
           </table>
-          <div id="events-loader" class="table-message" style="display:none">Загрузка…</div>
-          <div id="no-events" class="table-message" style="display:none">Событий не найдено.</div>
+          <div id="events-loader" class="table-message" style="display:none" data-i18n="common.loading">Loading…</div>
+          <div id="no-events" class="table-message" style="display:none" data-i18n="events.empty">No events found.</div>
         </div>
       </div>
 
-      <!-- АССИСТЕНТ (RAG-чат) -->
+      <!-- ASSISTANT (RAG chat) -->
       <div class="page" id="page-chat">
         <div class="page-header">
-          <h1 class="page-title">АССИСТЕНТ</h1>
-          <p class="page-subtitle">Задайте вопрос — ответ по вашим постам со ссылками на источники</p>
+          <h1 class="page-title" data-i18n="chat.title">ASSISTANT</h1>
+          <p class="page-subtitle" data-i18n="chat.subtitle">Ask a question — get an answer from your posts with source citations</p>
         </div>
         <div class="chat-page">
           <div id="chat-messages" class="chat-messages">
-            <div class="chat-empty" id="chat-empty">
-              Спросите что-нибудь о ваших каналах — например,
-              «какие вакансии появились на этой неделе?» или «что писали про ИИ?».
+            <div class="chat-empty" id="chat-empty" data-i18n="chat.empty">
+              Ask something about your channels — e.g.
+              “what job posts came up this week?” or “what did people say about AI?”.
             </div>
           </div>
           <div class="chat-input-row">
             <input type="text" id="chat-input" class="filter-input chat-input"
-                   placeholder="Ваш вопрос…" maxlength="1000" />
-            <button id="chat-send-btn" class="btn-primary">Спросить</button>
+                   placeholder="Your question…" data-i18n-placeholder="chat.inputPlaceholder" maxlength="1000" />
+            <button id="chat-send-btn" class="btn-primary" data-i18n="chat.ask">Ask</button>
           </div>
         </div>
       </div>
 
-      <!-- СТАТИСТИКА -->
+      <!-- STATISTICS -->
       <div class="page" id="page-stats">
         <div class="page-header sched-page-header">
           <div>
-            <h1 class="page-title">СТАТИСТИКА</h1>
-            <p class="page-subtitle">Активность сбора и разбивка по каналам и темам</p>
+            <h1 class="page-title" data-i18n="stats.title">STATISTICS</h1>
+            <p class="page-subtitle" data-i18n="stats.subtitle">Collection activity and breakdown by channel and topic</p>
           </div>
           <select id="stats-days" class="filter-select" style="width:auto">
-            <option value="7">7 дней</option>
-            <option value="14">14 дней</option>
-            <option value="30" selected>30 дней</option>
-            <option value="90">90 дней</option>
+            <option value="7" data-i18n="stats.days7">7 days</option>
+            <option value="14" data-i18n="stats.days14">14 days</option>
+            <option value="30" selected data-i18n="stats.days30">30 days</option>
+            <option value="90" data-i18n="stats.days90">90 days</option>
           </select>
         </div>
 
         <div id="stats-cards" class="stats-cards"></div>
 
         <div class="stats-section">
-          <h2 class="stats-h2">Посты по дням</h2>
+          <h2 class="stats-h2" data-i18n="stats.postsPerDay">Posts per day</h2>
           <div id="stats-perday" class="stats-daychart"></div>
         </div>
 
         <div class="stats-grid">
           <div class="stats-section">
-            <h2 class="stats-h2">По темам</h2>
+            <h2 class="stats-h2" data-i18n="stats.byTopic">By topic</h2>
             <div id="stats-percat" class="stats-barlist"></div>
           </div>
           <div class="stats-section">
-            <h2 class="stats-h2">Топ каналов</h2>
+            <h2 class="stats-h2" data-i18n="stats.topChannels">Top channels</h2>
             <div id="stats-perchan" class="stats-barlist"></div>
           </div>
         </div>
 
-        <div id="stats-loader" class="table-message" style="display:none">Загрузка…</div>
+        <div id="stats-loader" class="table-message" style="display:none" data-i18n="common.loading">Loading…</div>
       </div>
 
-      <!-- РАСПИСАНИЕ -->
+      <!-- SCHEDULE -->
       <div class="page" id="page-schedule">
         <div class="page-header sched-page-header">
           <div>
-            <h1 class="page-title">РАСПИСАНИЕ</h1>
-            <p class="page-subtitle">Автоматический сбор и генерация сводок</p>
+            <h1 class="page-title" data-i18n="schedule.title">SCHEDULE</h1>
+            <p class="page-subtitle" data-i18n="schedule.subtitle">Automatic collection and digest generation</p>
           </div>
-          <button id="sched-open-btn" class="btn-primary">+ Создать расписание</button>
+          <button id="sched-open-btn" class="btn-primary" data-i18n="schedule.create">+ Create schedule</button>
         </div>
 
         <div class="table-container">
           <table class="posts-table sched-table" id="sched-table">
             <thead>
               <tr>
-                <th class="scol-name" data-col="name">НАЗВАНИЕ</th>
-                <th class="scol-type" data-col="type">ТИПЫ</th>
-                <th class="scol-cron" data-col="cron">РАСПИСАНИЕ</th>
-                <th class="scol-topics" data-col="topics">ТЕМЫ</th>
-                <th class="scol-status" data-col="status">СТАТУС</th>
-                <th class="scol-last" data-col="last">ПОСЛЕДНИЙ ЗАПУСК</th>
+                <th class="scol-name" data-col="name" data-i18n="col.scheduleName">NAME</th>
+                <th class="scol-type" data-col="type" data-i18n="col.scheduleTypes">TYPES</th>
+                <th class="scol-cron" data-col="cron" data-i18n="col.scheduleCron">SCHEDULE</th>
+                <th class="scol-topics" data-col="topics" data-i18n="col.topics">TOPICS</th>
+                <th class="scol-status" data-col="status" data-i18n="col.scheduleStatus">STATUS</th>
+                <th class="scol-last" data-col="last" data-i18n="col.scheduleLast">LAST RUN</th>
                 <th class="scol-act" data-col="act"></th>
               </tr>
             </thead>
             <tbody id="sched-tbody"></tbody>
           </table>
-          <div id="sched-loader" class="table-message" style="display:none">Загрузка…</div>
-          <div id="sched-empty" class="table-message" style="display:none">
-            Нет расписаний. Нажмите «Создать расписание».
+          <div id="sched-loader" class="table-message" style="display:none" data-i18n="common.loading">Loading…</div>
+          <div id="sched-empty" class="table-message" style="display:none" data-i18n="schedule.empty">
+            No schedules yet. Click “Create schedule”.
           </div>
         </div>
       </div>
@@ -412,54 +414,54 @@
       <div id="sched-modal" class="modal-backdrop" style="display:none">
         <div class="modal-card">
           <div class="modal-header">
-            <h2 class="modal-title">Новое расписание</h2>
+            <h2 class="modal-title" data-i18n="modal.schedule.title">New schedule</h2>
             <button class="modal-close" id="sched-close-btn">✕</button>
           </div>
 
           <div class="modal-body">
             <div class="form-group">
-              <label class="form-label">Название</label>
-              <input id="m-name" type="text" class="filter-input" style="width:100%" placeholder="AI. в 9:00 каждый день" />
+              <label class="form-label" data-i18n="form.name">Name</label>
+              <input id="m-name" type="text" class="filter-input" style="width:100%" placeholder="AI. at 9:00 every day" data-i18n-placeholder="form.namePlaceholder" />
             </div>
 
             <div class="form-group">
-              <label class="form-label">Тип</label>
+              <label class="form-label" data-i18n="form.type">Type</label>
               <div class="type-btns" id="type-btns">
-                <button class="type-btn active" data-type="topics">Темы</button>
-                <button class="type-btn" data-type="events">События</button>
-                <button class="type-btn" data-type="collect">Сбор</button>
+                <button class="type-btn active" data-type="topics" data-i18n="schedType.topics">Topics</button>
+                <button class="type-btn" data-type="events" data-i18n="schedType.events">Events</button>
+                <button class="type-btn" data-type="collect" data-i18n="schedType.collect">Collect</button>
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">Расписание</label>
+              <label class="form-label" data-i18n="form.schedule">Schedule</label>
               <select id="m-cron-preset" class="filter-select" style="width:100%">
-                <option value="0 9 * * *">Каждый день в 09:00</option>
-                <option value="0 12 * * *">Каждый день в 12:00</option>
-                <option value="0 21 * * *">Каждый день в 21:00</option>
-                <option value="0 */6 * * *">Каждые 6 часов</option>
-                <option value="0 * * * *">Каждый час</option>
-                <option value="*/30 * * * *">Каждые 30 минут</option>
-                <option value="custom">Произвольное (cron)…</option>
+                <option value="0 9 * * *" data-i18n="cron.daily9">Every day at 09:00</option>
+                <option value="0 12 * * *" data-i18n="cron.daily12">Every day at 12:00</option>
+                <option value="0 21 * * *" data-i18n="cron.daily21">Every day at 21:00</option>
+                <option value="0 */6 * * *" data-i18n="cron.every6h">Every 6 hours</option>
+                <option value="0 * * * *" data-i18n="cron.hourly">Every hour</option>
+                <option value="*/30 * * * *" data-i18n="cron.every30m">Every 30 minutes</option>
+                <option value="custom" data-i18n="cron.custom">Custom (cron)…</option>
               </select>
               <input id="m-cron-custom" type="text" class="filter-input" style="width:100%;margin-top:6px;display:none" placeholder="0 9 * * *" />
             </div>
 
             <div id="m-topics-section" class="form-group">
-              <label class="form-label">Глубина сбора</label>
+              <label class="form-label" data-i18n="form.depth">Collection depth</label>
               <div class="sched-radio-row">
-                <label class="sched-radio"><input type="radio" name="m-hours" value="24" checked /> 24 часа</label>
-                <label class="sched-radio"><input type="radio" name="m-hours" value="72" /> 72 часа</label>
-                <label class="sched-radio"><input type="radio" name="m-hours" value="168" /> 7 дней</label>
+                <label class="sched-radio"><input type="radio" name="m-hours" value="24" checked /> <span data-i18n="depth.24h">24 hours</span></label>
+                <label class="sched-radio"><input type="radio" name="m-hours" value="72" /> <span data-i18n="depth.72h">72 hours</span></label>
+                <label class="sched-radio"><input type="radio" name="m-hours" value="168" /> <span data-i18n="depth.7d">7 days</span></label>
               </div>
 
-              <label class="form-label" style="margin-top:12px">Модель LLM</label>
+              <label class="form-label" style="margin-top:12px" data-i18n="form.model">LLM model</label>
               <select id="m-model" class="filter-select" style="width:100%">
                 <option value="deepseek-v4-flash">Flash (deepseek-v4-flash)</option>
                 <option value="deepseek-v4-pro">Pro (deepseek-v4-pro)</option>
               </select>
 
-              <label class="form-label" style="margin-top:12px">Темы постов <span class="sched-hint">(пусто = все)</span></label>
+              <label class="form-label" style="margin-top:12px"><span data-i18n="form.postTopics">Post topics</span> <span class="sched-hint" data-i18n="form.postTopicsHint">(empty = all)</span></label>
               <div class="sched-categories" id="m-categories">
                 <label class="cat-check"><input type="checkbox" value="Технологии" /> Технологии</label>
                 <label class="cat-check"><input type="checkbox" value="Разработка" /> Разработка</label>
@@ -480,53 +482,53 @@
           </div>
 
           <div class="modal-footer">
-            <button class="btn-secondary" id="sched-cancel-btn">Отмена</button>
-            <button class="btn-primary" id="sched-create-btn">Создать</button>
+            <button class="btn-secondary" id="sched-cancel-btn" data-i18n="modal.cancel">Cancel</button>
+            <button class="btn-primary" id="sched-create-btn" data-i18n="modal.create">Create</button>
           </div>
         </div>
       </div>
 
-      <!-- КАНАЛЫ -->
+      <!-- CHANNELS -->
       <div class="page" id="page-channels">
         <div class="page-header">
-          <h1 class="page-title">КАНАЛЫ</h1>
-          <p class="page-subtitle">Управление источниками данных</p>
+          <h1 class="page-title" data-i18n="channels.title">CHANNELS</h1>
+          <p class="page-subtitle" data-i18n="channels.subtitle">Manage your data sources</p>
         </div>
         <div class="channels-page">
           <div class="channels-actions">
             <div class="add-channel-row">
-              <input id="channel-input" type="text" placeholder="@username или числовой ID канала" class="filter-input add-input" />
-              <button id="add-channel-btn" class="btn-primary">Добавить</button>
+              <input id="channel-input" type="text" placeholder="@username or numeric channel ID" data-i18n-placeholder="channels.addPlaceholder" class="filter-input add-input" />
+              <button id="add-channel-btn" class="btn-primary" data-i18n="channels.add">Add</button>
             </div>
             <div class="channels-btns">
-              <button id="import-btn" class="btn-secondary">Импортировать мои каналы</button>
-              <button id="sync-btn" class="btn-secondary">Синхронизировать</button>
+              <button id="import-btn" class="btn-secondary" data-i18n="channels.import">Import my channels</button>
+              <button id="sync-btn" class="btn-secondary" data-i18n="channels.sync">Sync</button>
             </div>
           </div>
           <ul id="channels-list" class="channels-list"></ul>
         </div>
       </div>
 
-      <!-- ДОСТУП (только владелец) -->
+      <!-- ACCESS (owner only) -->
       <div class="page" id="page-admin">
         <div class="page-header">
-          <h1 class="page-title">ДОСТУП</h1>
-          <p class="page-subtitle">Заявки на доступ и коды-приглашения</p>
+          <h1 class="page-title" data-i18n="admin.title">ACCESS</h1>
+          <p class="page-subtitle" data-i18n="admin.subtitle">Access requests and invite codes</p>
         </div>
 
         <div class="admin-section">
-          <h2 class="stats-h2">Ожидают одобрения</h2>
+          <h2 class="stats-h2" data-i18n="admin.pendingHeading">Awaiting approval</h2>
           <ul id="pending-users-list" class="channels-list"></ul>
-          <div id="pending-users-empty" class="table-message" style="display:none">Нет заявок в очереди.</div>
+          <div id="pending-users-empty" class="table-message" style="display:none" data-i18n="admin.pendingEmpty">No pending requests.</div>
         </div>
 
         <div class="admin-section">
           <div class="admin-section-head">
-            <h2 class="stats-h2">Коды-приглашения</h2>
-            <button id="create-invite-btn" class="btn-secondary">+ Создать код</button>
+            <h2 class="stats-h2" data-i18n="admin.invitesHeading">Invite codes</h2>
+            <button id="create-invite-btn" class="btn-secondary" data-i18n="admin.createInvite">+ Create code</button>
           </div>
           <ul id="invites-list" class="channels-list"></ul>
-          <div id="invites-empty" class="table-message" style="display:none">Кодов пока нет.</div>
+          <div id="invites-empty" class="table-message" style="display:none" data-i18n="admin.invitesEmpty">No codes yet.</div>
         </div>
       </div>
 
@@ -537,7 +539,7 @@
   <div id="cluster-modal" class="modal-backdrop" style="display:none">
     <div class="modal-card">
       <div class="modal-header">
-        <h2 class="modal-title">Источники новости</h2>
+        <h2 class="modal-title" data-i18n="cluster.title">News sources</h2>
         <button id="cluster-modal-close" class="modal-close">✕</button>
       </div>
       <div class="modal-body" id="cluster-modal-body"></div>
@@ -546,6 +548,7 @@
 
   <div id="toast-container" class="toast-container"></div>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1131,6 +1131,25 @@ body {
 }
 .sidebar-theme:hover { border-color: #8892a4; color: #e2e8f0; }
 
+/* ── Language toggle (fixed, top-right — visible on login/pending/app alike) ── */
+.lang-toggle-btn {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+.lang-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ── Toasts ────────────────────────────────────────────────────────────────── */
 .toast-container {
   position: fixed;

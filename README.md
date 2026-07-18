@@ -26,14 +26,14 @@ SumPoint connects to your Telegram channel subscriptions, filters out ads and du
 
 ## 📷 Screenshots
 
-| Лента постов | События | Статистика |
+| Post feed | Events | Statistics |
 |---|---|---|
-| ![Посты](docs/screenshots/posts.png) | ![События](docs/screenshots/events.png) | ![Статистика](docs/screenshots/stats.png) |
+| ![Posts](docs/screenshots/posts.png) | ![Events](docs/screenshots/events.png) | ![Statistics](docs/screenshots/stats.png) |
 
-Лента поддерживает фильтры по дате/каналу/теме, три уровня плотности, полнотекстовый и
-семантический поиск, отметку прочитанного и выбор строк чекбоксами для CSV/JSON-экспорта.
-Вкладка «События» умеет искать по названию/месту/спикерам и экспортировать выбранные
-события в `.ics` для календаря.
+The feed supports filters by date/channel/topic, three density levels, full-text and
+semantic search, read tracking, and row checkboxes for CSV/JSON export. The Events tab
+can search by name/location/speaker and export the selected events to `.ics` for your
+calendar. The UI defaults to English, with a one-click switch to Russian.
 
 ---
 
