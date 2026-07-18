@@ -7,6 +7,9 @@ maintenance_tasks). Their public task objects are re-exported below so existing
 """
 import logging
 
+import sentry_sdk
+
+from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.repositories import schedule_repository, user_repository
 from app.services.digest_delivery import send_digest_for_user
@@ -51,4 +54,30 @@ async def _async_send_digests(slot: str):
                 model = sched.model if sched else None
                 await send_digest_for_user(bot, user.id, db, hours, categories, model)
             except Exception as e:
+                # This except swallows the failure as far as Celery is concerned
+                # (autoretry_for on the task never sees it), so nothing else
+                # would otherwise learn a digest silently failed to send.
                 logger.error("Failed to send digest to user %s: %s", user.id, e)
+                sentry_sdk.capture_exception(e)
+                await _notify_owners_digest_failure(bot, slot, user.id, e)
+
+
+async def _notify_owners_digest_failure(bot, slot: str, user_id: int, error: Exception) -> None:
+    """DM every configured owner when a scheduled digest fails to send.
+
+    Delivery failures here are otherwise invisible: they're caught before
+    Celery's autoretry sees them, and (even with Sentry now wired up in the
+    worker) a caught exception isn't auto-captured without this explicit call.
+    """
+    owner_ids = get_settings().owner_telegram_id_set
+    if not owner_ids:
+        return
+    text = (
+        f"⚠️ Не удалось отправить {slot}-дайджест пользователю `{user_id}`: "
+        f"{str(error)[:200]}"
+    )
+    for owner_id in owner_ids:
+        try:
+            await bot.send_message(chat_id=owner_id, text=text, parse_mode="Markdown")
+        except Exception:
+            logger.warning("Failed to notify owner %s about digest failure", owner_id)

@@ -22,6 +22,21 @@ if settings.log_level.upper() != "DEBUG":
     for _lib in ("httpx", "httpcore", "openai", "sqlalchemy.engine"):
         logging.getLogger(_lib).setLevel(logging.WARNING)
 
+# ── Sentry (optional error tracking) ──────────────────────────────────
+# The worker/beat processes never import app.main, so without this they never
+# call sentry_sdk.init() — exceptions raised inside Celery tasks (including
+# ones caught and only logged) would silently never reach Sentry even with
+# SENTRY_DSN set. This mirrors the init in app/main.py for the API process.
+if settings.sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment="production" if not settings.debug else "development",
+        send_default_pii=False,
+    )
+    logging.getLogger("sentry_sdk").setLevel(logging.WARNING)
+
 celery_app = Celery(
     "sumpoint",
     broker=settings.redis_url,
