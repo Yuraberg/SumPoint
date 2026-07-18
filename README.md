@@ -6,7 +6,7 @@ SumPoint connects to your Telegram channel subscriptions, filters out ads and du
 
 [![CI](https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml/badge.svg)](https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-Proprietary-red)
 
 ---
 
@@ -211,4 +211,8 @@ All DeepSeek prompts (`app/prompts/`) follow a consistent structure:
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+**© 2026 Yuraberg. All rights reserved.**
+
+This software is proprietary. No use, copying, modification, or distribution
+is permitted without prior written authorization from the copyright holder —
+see [LICENSE](LICENSE) for the full terms.
