@@ -45,7 +45,7 @@ function currentTheme() {
 function applyThemeButton() {
   const btn = document.getElementById("theme-btn");
   if (!btn) return;
-  btn.textContent = currentTheme() === "dark" ? "☀️ Светлая тема" : "🌙 Тёмная тема";
+  btn.textContent = currentTheme() === "dark" ? t("sidebar.themeLight") : t("sidebar.themeDark");
 }
 function toggleTheme() {
   const next = currentTheme() === "dark" ? "light" : "dark";
@@ -159,7 +159,7 @@ function initResizableColumns(tableId, storageKey) {
   });
 }
 
-// ── Row density (Кратко / Средне / Расширенно) ───────────────────────────────
+// ── Row density (Compact / Medium / Expanded) ────────────────────────────────
 function setDensity(d) {
   density = d;
   localStorage.setItem("sp_density", d);
@@ -241,12 +241,12 @@ async function tryMagicLinkVerify() {
     );
     if (!resp.ok) {
       const err = await resp.json();
-      toast(err.detail || "Ссылка недействительна", "error");
+      toast(err.detail || t("login.errLinkInvalid"), "error");
       return false;
     }
     return true;  // cookie is set
   } catch (e) {
-    toast("Ошибка входа: " + e.message, "error");
+    toast(t("login.errAuth") + e.message, "error");
     return false;
   }
 }
@@ -330,14 +330,14 @@ async function requestMagicLink() {
   const username = input.value.trim();
   
   if (!username) {
-    status.textContent = "Введите ваш Telegram @username";
+    status.textContent = t("login.enterUsername");
     return;
   }
-  
+
   btn.disabled = true;
-  btn.textContent = "Отправка...";
+  btn.textContent = t("login.magicBtnSending");
   status.textContent = "";
-  
+
   try {
     const resp = await fetch(`${API}/auth/telegram/magic-link/request`, {
       method: "POST",
@@ -346,18 +346,18 @@ async function requestMagicLink() {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      status.textContent = data.detail || "Ошибка";
+      status.textContent = data.detail || t("login.errGeneric");
       status.className = "magic-status error";
     } else {
       status.textContent = data.message;
       status.className = "magic-status success";
     }
   } catch (e) {
-    status.textContent = "Ошибка сети";
+    status.textContent = t("login.errNetwork");
     status.className = "magic-status error";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Получить ссылку";
+    btn.textContent = t("login.magicBtn");
   }
 }
 
@@ -385,6 +385,10 @@ async function boot() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  applyI18n();
+  const langBtn = document.getElementById("lang-btn");
+  if (langBtn) langBtn.addEventListener("click", () => setLang(lang === "en" ? "ru" : "en"));
+
   boot();
   loadPublicConfig();
 
@@ -538,7 +542,7 @@ async function loadPublicConfig() {
 function showWidgetFallback(container) {
   if (container.querySelector(".login-widget-fallback")) return;
   container.innerHTML =
-    '<p class="login-widget-fallback">Кнопка входа временно недоступна — воспользуйтесь ссылкой ниже.</p>';
+    `<p class="login-widget-fallback">${escHtml(t("login.widgetFallback"))}</p>`;
 }
 
 // ── Show app ──────────────────────────────────────────────────────────────────
@@ -600,11 +604,11 @@ async function activatePendingInvite() {
   if (!code) return;
   try {
     await apiFetch("/auth/redeem-invite", { method: "POST", body: JSON.stringify({ code }) });
-    status.textContent = "✓ Код принят! Загружаем приложение…";
+    status.textContent = t("pending.accepted");
     status.className = "magic-status success";
     setTimeout(() => location.reload(), 800);
   } catch (e) {
-    status.textContent = "Код недействителен или уже использован.";
+    status.textContent = t("pending.rejected");
     status.className = "magic-status error";
   }
 }
@@ -622,12 +626,12 @@ async function loadAdmin() {
       const name = escHtml(u.username ? "@" + u.username : u.first_name);
       li.innerHTML = `
         <span class="channel-item-name">${name} <span style="color:var(--muted);font-size:12px">id ${u.id}</span></span>
-        <button class="btn-ghost-sm" data-action="approve-user" data-id="${u.id}">Одобрить</button>
+        <button class="btn-ghost-sm" data-action="approve-user" data-id="${u.id}">${t("admin.approve")}</button>
       `;
       list.appendChild(li);
     });
   } catch (e) {
-    toast("Не удалось загрузить заявки: " + e.message, "error");
+    toast(t("admin.errPending") + e.message, "error");
   }
 
   try {
@@ -643,34 +647,34 @@ async function loadAdmin() {
       li.innerHTML = `
         <span class="channel-item-name">
           <code>${escHtml(inv.code)}</code>
-          <span style="color:var(--muted);font-size:12px">использован ${used}</span>
+          <span style="color:var(--muted);font-size:12px">${t("admin.usedCount", used)}</span>
         </span>
         <button class="channel-remove" data-action="delete-invite" data-id="${inv.id}">✕</button>
       `;
       list.appendChild(li);
     });
   } catch (e) {
-    toast("Не удалось загрузить коды: " + e.message, "error");
+    toast(t("admin.errInvites") + e.message, "error");
   }
 }
 
 async function approveUser(id) {
   try {
     await apiFetch(`/admin/pending-users/${id}/approve`, { method: "POST" });
-    toast("Пользователь одобрен", "success");
+    toast(t("admin.userApproved"), "success");
     loadAdmin();
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("admin.error") + e.message, "error");
   }
 }
 
 async function createInvite() {
   try {
     const inv = await apiFetch("/admin/invites", { method: "POST", body: JSON.stringify({}) });
-    toast(`Код создан: ${inv.code}`, "success");
+    toast(t("admin.inviteCreated", inv.code), "success");
     loadAdmin();
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("admin.error") + e.message, "error");
   }
 }
 
@@ -679,7 +683,7 @@ async function deleteInvite(id) {
     await fetch(`${API}/admin/invites/${id}`, { method: "DELETE", credentials: "include" });
     loadAdmin();
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("admin.error") + e.message, "error");
   }
 }
 
@@ -699,7 +703,7 @@ async function onTelegramAuth(data) {
     if (!resp.ok) throw new Error("Auth failed");
     location.reload();  // session cookie is set; boot() → /auth/me → app
   } catch (e) {
-    toast("Ошибка входа: " + e.message, "error");
+    toast(t("login.errAuth") + e.message, "error");
   }
 }
 
@@ -743,9 +747,9 @@ async function exportPosts(format) {
     a.click();
     a.remove();
     URL.revokeObjectURL(objUrl);
-    toast(`Экспорт (${format.toUpperCase()}) готов`, "success");
+    toast(t("posts.exportReady", format.toUpperCase()), "success");
   } catch (e) {
-    toast("Ошибка экспорта: " + e.message, "error");
+    toast(t("posts.errExport") + e.message, "error");
   }
 }
 
@@ -775,7 +779,7 @@ function _postExportRecord(post) {
 function exportSelectedPosts(format) {
   const posts = lastPosts.filter(p => selectedPostIds.has(p.id));
   if (posts.length === 0) {
-    toast("Нет выбранных постов для экспорта", "error");
+    toast(t("posts.noneSelected"), "error");
     return;
   }
   const records = posts.map(_postExportRecord);
@@ -802,7 +806,7 @@ function exportSelectedPosts(format) {
   a.click();
   a.remove();
   URL.revokeObjectURL(objUrl);
-  toast(`Экспортировано постов: ${records.length}`, "success");
+  toast(t("posts.exportedCount", records.length), "success");
 }
 
 function toggleAllPostsSelected(e) {
@@ -877,7 +881,7 @@ async function loadFeed(overrideRows = null) {
     feed.done = data.length < FEED_PAGE;
     ensureFeedObserver();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6" class="table-message">Ошибка загрузки: ${escHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="table-message">${escHtml(t("posts.errLoading"))}${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -897,7 +901,7 @@ async function loadMorePosts() {
       if (data.length < FEED_PAGE) feed.done = true;
     }
   } catch (e) {
-    toast("Не удалось загрузить ещё: " + e.message, "error");
+    toast(t("posts.errLoadingMore") + e.message, "error");
   } finally {
     feed.loading = false;
     moreEl.style.display = "none";
@@ -933,7 +937,7 @@ function appendPosts(data) {
 }
 
 function renderPostRow(post) {
-  const date = new Date(post.published_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+  const date = new Date(post.published_at).toLocaleDateString(localeDate(), { day: "2-digit", month: "2-digit" });
   const channelName = (post.channel_title || post.channel_username || "—");
   const channelShort = channelName.length > 24 ? channelName.slice(0, 22) + "…" : channelName;
   const rawText = (post.text || "").replace(/\*\*/g, "").replace(/\n/g, " ").trim();
@@ -954,7 +958,7 @@ function renderPostRow(post) {
     : null;
 
   const dupBadge = (post.cluster_size && post.cluster_size > 1 && post.cluster_id != null)
-    ? `<span class="dup-badge" data-cluster="${post.cluster_id}" title="Эта новость в ${post.cluster_size} каналах — показать источники">⧉ ${post.cluster_size} каналах</span>`
+    ? `<span class="dup-badge" data-cluster="${post.cluster_id}" title="${escHtml(t("posts.dupBadgeTitle", post.cluster_size))}">${escHtml(t("posts.dupBadge", post.cluster_size))}</span>`
     : "";
 
   const mainRow = document.createElement("tr");
@@ -964,7 +968,7 @@ function renderPostRow(post) {
     <td class="cell-channel" title="${escHtml(channelName)}">${escHtml(channelShort)}</td>
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
     <td class="cell-post" title="${escHtml(rawText.slice(0, 300))}">${escHtml(preview)}</td>
-    <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(post.category)}</span>` : ""}${dupBadge}</td>
+    <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(categoryLabel(post.category))}</span>` : ""}${dupBadge}</td>
     <td class="cell-date">${simBadge} ${date}</td>
   `;
 
@@ -990,16 +994,16 @@ function renderPostRow(post) {
   const originalSafe = post.text ? escHtml(post.text.slice(0, 2000)) : "";
   const summaryBlock = post.summary ? `
     <div>
-      <div class="detail-label">Краткое содержание</div>
+      <div class="detail-label">${escHtml(t("posts.summaryLabel"))}</div>
       <div class="detail-summary">${escHtml(post.summary)}</div>
     </div>` : "";
   const originalBlock = originalSafe ? `
     <div>
-      <div class="detail-label">Оригинальный текст</div>
+      <div class="detail-label">${escHtml(t("posts.originalLabel"))}</div>
       <div class="detail-original">${originalSafe}</div>
     </div>` : "";
   const safeTgLink = sanitizeUrl(tgLink);
-  const linkBlock = safeTgLink ? `<a class="detail-link" href="${escHtml(safeTgLink)}" target="_blank" rel="noopener">→ Открыть в Telegram</a>` : "";
+  const linkBlock = safeTgLink ? `<a class="detail-link" href="${escHtml(safeTgLink)}" target="_blank" rel="noopener">${escHtml(t("posts.readMore"))}</a>` : "";
 
   detailRow.innerHTML = `<td colspan="6"><div class="detail-inner">${summaryBlock}${originalBlock}${linkBlock}</div></td>`;
 
@@ -1024,23 +1028,23 @@ async function openClusterModal(clusterId) {
   const modal = document.getElementById("cluster-modal");
   const body = document.getElementById("cluster-modal-body");
   if (!modal || !body) return;
-  body.innerHTML = "<div class='table-message'>Загрузка…</div>";
+  body.innerHTML = `<div class='table-message'>${escHtml(t("common.loading"))}</div>`;
   modal.style.display = "flex";
   try {
     const rows = await apiFetch(`/posts/cluster/${clusterId}`);
     if (!rows || !rows.length) {
-      body.innerHTML = "<div class='table-message'>Источники не найдены.</div>";
+      body.innerHTML = `<div class='table-message'>${escHtml(t("cluster.empty"))}</div>`;
       return;
     }
     body.innerHTML = rows.map(r => {
       const name = escHtml(r.channel_title || r.channel_username || "—");
-      const date = new Date(r.published_at).toLocaleString("ru-RU",
+      const date = new Date(r.published_at).toLocaleString(localeDate(),
         { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
       const link = r.channel_username
         ? sanitizeUrl(`https://t.me/${r.channel_username}/${r.telegram_message_id}`)
         : null;
       const openLink = link
-        ? `<a class="cluster-src-link" href="${escHtml(link)}" target="_blank" rel="noopener">→ Открыть</a>`
+        ? `<a class="cluster-src-link" href="${escHtml(link)}" target="_blank" rel="noopener">${escHtml(t("cluster.openLink"))}</a>`
         : "";
       return `<div class="cluster-src">
         <div class="cluster-src-head">
@@ -1052,8 +1056,8 @@ async function openClusterModal(clusterId) {
       </div>`;
     }).join("");
   } catch (e) {
-    body.innerHTML = "<div class='table-message'>Ошибка загрузки источников.</div>";
-    toast("Не удалось загрузить источники: " + e.message, "error");
+    body.innerHTML = `<div class='table-message'>${escHtml(t("cluster.error"))}</div>`;
+    toast(t("cluster.errToast") + e.message, "error");
   }
 }
 
@@ -1107,11 +1111,11 @@ async function markAllRead() {
     if (filters.channelId) params.push(`channel_id=${filters.channelId}`);
     if (params.length) url += "?" + params.join("&");
     const res = await apiFetch(url, { method: "POST" });
-    toast(`Отмечено прочитанным: ${res ? res.marked : 0}`, "success");
+    toast(t("posts.markedReadCount", res ? res.marked : 0), "success");
     await refreshUnreadCount();
     loadFeed();
   } catch (e) {
-    toast("Не удалось: " + e.message, "error");
+    toast(t("posts.markReadFailed") + e.message, "error");
   }
 }
 
@@ -1143,7 +1147,7 @@ async function runSearch() {
     const results = await apiFetch(`/posts/semantic-search?q=${encodeURIComponent(q)}&limit=80`);
     loadFeed(results);
   } catch (e) {
-    toast("Ошибка поиска: " + e.message, "error");
+    toast(t("posts.errSearch") + e.message, "error");
   }
 }
 
@@ -1184,18 +1188,18 @@ async function loadStats() {
     renderBarList("stats-perchan", data.per_channel, r => r.title || r.username || "—");
   } catch (e) {
     if (loader) loader.style.display = "none";
-    toast("Не удалось загрузить статистику: " + e.message, "error");
+    toast(t("stats.errLoading") + e.message, "error");
   }
 }
 
-function renderStatCards(t) {
+function renderStatCards(totals) {
   const el = document.getElementById("stats-cards");
-  if (!el || !t) return;
+  if (!el || !totals) return;
   const cards = [
-    { label: "Постов", value: t.posts, accent: false },
-    { label: "Непрочитано", value: t.unread, accent: true },
-    { label: "С событиями", value: t.events, accent: false },
-    { label: "Каналов", value: t.channels, accent: false },
+    { label: t("stats.cardPosts"), value: totals.posts, accent: false },
+    { label: t("stats.cardUnread"), value: totals.unread, accent: true },
+    { label: t("stats.cardEvents"), value: totals.events, accent: false },
+    { label: t("stats.cardChannels"), value: totals.channels, accent: false },
   ];
   el.innerHTML = cards.map(c => `
     <div class="stat-card${c.accent ? " accent" : ""}">
@@ -1207,11 +1211,11 @@ function renderStatCards(t) {
 function renderDayChart(days) {
   const el = document.getElementById("stats-perday");
   if (!el) return;
-  if (!days || !days.length) { el.innerHTML = "<span style='color:var(--muted);font-size:13px'>Нет данных</span>"; return; }
+  if (!days || !days.length) { el.innerHTML = `<span style='color:var(--muted);font-size:13px'>${escHtml(t("stats.noData"))}</span>`; return; }
   const max = Math.max(1, ...days.map(d => d.count));
   el.innerHTML = days.map(d => {
     const pct = (d.count / max) * 100;
-    const label = new Date(d.date + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+    const label = new Date(d.date + "T00:00:00").toLocaleDateString(localeDate(), { day: "numeric", month: "short" });
     return `<div class="day-bar" title="${label}: ${d.count}">
       <div class="day-tip">${label}: ${d.count}</div>
       <div class="day-fill" style="height:${pct}%"></div>
@@ -1222,7 +1226,7 @@ function renderDayChart(days) {
 function renderBarList(elId, rows, nameFn) {
   const el = document.getElementById(elId);
   if (!el) return;
-  if (!rows || !rows.length) { el.innerHTML = "<span style='color:var(--muted);font-size:13px'>Нет данных</span>"; return; }
+  if (!rows || !rows.length) { el.innerHTML = `<span style='color:var(--muted);font-size:13px'>${escHtml(t("stats.noData"))}</span>`; return; }
   const max = Math.max(1, ...rows.map(r => r.count));
   el.innerHTML = rows.map(r => {
     const pct = (r.count / max) * 100;
@@ -1262,7 +1266,7 @@ function renderChatSources(sources) {
     const n = i + 1;
     const name = escHtml(s.channel_title || s.channel_username || "—");
     const date = s.published_at
-      ? new Date(s.published_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })
+      ? new Date(s.published_at).toLocaleDateString(localeDate(), { day: "2-digit", month: "2-digit", year: "numeric" })
       : "";
     const link = s.channel_username
       ? sanitizeUrl(`https://t.me/${s.channel_username}/${s.telegram_message_id}`)
@@ -1279,7 +1283,7 @@ function renderChatSources(sources) {
       </div>
     </div>`;
   }).join("");
-  return `<div class="chat-sources"><div class="chat-sources-label">Источники</div>${items}</div>`;
+  return `<div class="chat-sources"><div class="chat-sources-label">${escHtml(t("chat.sources"))}</div>${items}</div>`;
 }
 
 async function sendChatQuestion() {
@@ -1289,14 +1293,14 @@ async function sendChatQuestion() {
   chatBusy = true;
   input.value = "";
   appendChatMessage("user", escHtml(q));
-  const thinking = appendChatMessage("bot", "<span class='chat-thinking'>Думаю…</span>");
+  const thinking = appendChatMessage("bot", `<span class='chat-thinking'>${escHtml(t("chat.thinking"))}</span>`);
   try {
     const res = await apiFetch("/chat/ask", {
       method: "POST",
       body: JSON.stringify({ question: q }),
     });
     thinking.remove();
-    const answer = (res && res.answer) ? res.answer : "Не удалось получить ответ.";
+    const answer = (res && res.answer) ? res.answer : t("chat.noAnswer");
     const bot = appendChatMessage("bot",
       `<div class="chat-answer">${linkifyCitations(answer)}</div>${renderChatSources(res && res.sources)}`);
     bot.querySelectorAll(".cite").forEach(a => {
@@ -1308,7 +1312,7 @@ async function sendChatQuestion() {
     });
   } catch (e) {
     thinking.remove();
-    appendChatMessage("bot", "<span class='chat-error'>Ошибка: " + escHtml(e.message) + "</span>");
+    appendChatMessage("bot", `<span class='chat-error'>${escHtml(t("chat.error"))}${escHtml(e.message)}</span>`);
   } finally {
     chatBusy = false;
     input.focus();
@@ -1369,7 +1373,7 @@ async function loadEvents() {
     applyEventSearch();
   } catch (e) {
     loader.style.display = "none";
-    tbody.innerHTML = `<tr><td colspan="9" class="table-message">Ошибка загрузки: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="table-message">${escHtml(t("events.errLoading"))}${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -1463,15 +1467,15 @@ function buildIcs(events) {
     if (!dt) return;  // skip events without a usable date
     count++;
     const descParts = [];
-    if (ev.location) descParts.push("Место: " + ev.location);
-    if (ev.channel_title) descParts.push("Канал: " + ev.channel_title);
-    if ((ev.speakers || []).length) descParts.push("Спикеры: " + ev.speakers.join(", "));
+    if (ev.location) descParts.push(t("events.icsLocation") + ev.location);
+    if (ev.channel_title) descParts.push(t("events.icsChannel") + ev.channel_title);
+    if ((ev.speakers || []).length) descParts.push(t("events.icsSpeakers") + ev.speakers.join(", "));
     if (ev.link) descParts.push(ev.link);
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:sumpoint-${Date.now()}-${i}@sumpoint`);
     lines.push(`DTSTAMP:${now}`);
     lines.push(dt.allDay ? `DTSTART;VALUE=DATE:${dt.value}` : `DTSTART:${dt.value}`);
-    lines.push("SUMMARY:" + _icsEscape(ev.name || "Событие"));
+    lines.push("SUMMARY:" + _icsEscape(ev.name || t("events.icsFallbackName")));
     if (ev.location) lines.push("LOCATION:" + _icsEscape(ev.location));
     if (descParts.length) lines.push("DESCRIPTION:" + _icsEscape(descParts.join("\n")));
     lines.push("END:VEVENT");
@@ -1482,7 +1486,7 @@ function buildIcs(events) {
 
 function exportEventsIcs() {
   if (!lastEvents || lastEvents.length === 0) {
-    toast("Нет событий для экспорта", "error");
+    toast(t("events.noneToExport"), "error");
     return;
   }
   // Export just the checked events if any are checked, otherwise everything currently shown.
@@ -1490,7 +1494,7 @@ function exportEventsIcs() {
   const toExport = selected.length > 0 ? selected : lastEvents;
   const { text, count } = buildIcs(toExport);
   if (count === 0) {
-    toast("У событий нет распознанных дат", "error");
+    toast(t("events.noRecognizedDates"), "error");
     return;
   }
   const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
@@ -1502,7 +1506,7 @@ function exportEventsIcs() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  toast(`Экспортировано событий: ${count}`, "success");
+  toast(t("events.exportedCount", count), "success");
 }
 
 function populateTopicsDropdown(events) {
@@ -1522,12 +1526,12 @@ function populateTopicsDropdown(events) {
 
 function renderEventRow(ev) {
   const dateStr = ev.date
-    ? new Date(ev.date + "T00:00:00").toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" })
+    ? new Date(ev.date + "T00:00:00").toLocaleDateString(localeDate(), { day: "2-digit", month: "2-digit", year: "numeric" })
     : "—";
   const timeStr = ev.time || "";
   const name = ev.name || "—";
-  const topics = (ev.topics || []).slice(0, 3).map(t => `<span class="ev-topic-tag">${escHtml(t)}</span>`).join(" ");
-  const evType = ev.type ? `<span class="ev-type-badge">${escHtml(ev.type)}</span>` : "";
+  const topics = (ev.topics || []).slice(0, 3).map(tp => `<span class="ev-topic-tag">${escHtml(tp)}</span>`).join(" ");
+  const evType = ev.type ? `<span class="ev-type-badge">${escHtml(eventTypeLabel(ev.type))}</span>` : "";
   const location = ev.location ? escHtml(ev.location) : "";
   const speakers = (ev.speakers || []).join(", ");
   const partners = (ev.partners || []).join(", ");
@@ -1562,21 +1566,21 @@ function renderEventRow(ev) {
   const detailRow = document.createElement("tr");
   detailRow.className = "detail-row";
   const channelInfo = ev.channel_title ? `<b>${escHtml(ev.channel_title)}</b>` : "";
-  const allTopics = (ev.topics || []).map(t => `<span class="ev-topic-tag">${escHtml(t)}</span>`).join(" ");
+  const allTopics = (ev.topics || []).map(tp => `<span class="ev-topic-tag">${escHtml(tp)}</span>`).join(" ");
   const fullSpeakers = (ev.speakers || []).length > 0
-    ? `<div class="detail-label">Спикеры</div><div>${escHtml((ev.speakers || []).join(", "))}</div>` : "";
+    ? `<div class="detail-label">${escHtml(t("events.detailSpeakers"))}</div><div>${escHtml((ev.speakers || []).join(", "))}</div>` : "";
   const fullPartners = (ev.partners || []).length > 0
-    ? `<div class="detail-label">Партнёры</div><div>${escHtml((ev.partners || []).join(", "))}</div>` : "";
+    ? `<div class="detail-label">${escHtml(t("events.detailPartners"))}</div><div>${escHtml((ev.partners || []).join(", "))}</div>` : "";
   const linkBlock = safeEvLink
-    ? `<a class="detail-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">→ Подробнее</a>` : "";
+    ? `<a class="detail-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">${escHtml(t("events.readMore"))}</a>` : "";
 
   detailRow.innerHTML = `<td colspan="9"><div class="detail-inner ev-detail-inner">
     <div style="display:flex;gap:24px;flex-wrap:wrap">
-      ${channelInfo ? `<div><div class="detail-label">Канал</div><div>${channelInfo}</div></div>` : ""}
-      ${ev.location ? `<div><div class="detail-label">Место</div><div>${escHtml(ev.location)}</div></div>` : ""}
-      ${ev.date ? `<div><div class="detail-label">Дата и время</div><div>${dateStr}${timeStr ? " " + timeStr : ""}</div></div>` : ""}
+      ${channelInfo ? `<div><div class="detail-label">${escHtml(t("events.detailChannel"))}</div><div>${channelInfo}</div></div>` : ""}
+      ${ev.location ? `<div><div class="detail-label">${escHtml(t("events.detailLocation"))}</div><div>${escHtml(ev.location)}</div></div>` : ""}
+      ${ev.date ? `<div><div class="detail-label">${escHtml(t("events.detailDateTime"))}</div><div>${dateStr}${timeStr ? " " + timeStr : ""}</div></div>` : ""}
     </div>
-    ${allTopics ? `<div><div class="detail-label">Темы</div><div style="display:flex;gap:4px;flex-wrap:wrap">${allTopics}</div></div>` : ""}
+    ${allTopics ? `<div><div class="detail-label">${escHtml(t("events.detailTopics"))}</div><div style="display:flex;gap:4px;flex-wrap:wrap">${allTopics}</div></div>` : ""}
     ${fullSpeakers}
     ${fullPartners}
     ${linkBlock}
@@ -1595,16 +1599,16 @@ function renderEventRow(ev) {
 // ── Channels ──────────────────────────────────────────────────────────────────
 
 function _fmtAgo(iso) {
-  if (!iso) return "никогда";
+  if (!iso) return t("time.never");
   const then = new Date(iso).getTime();
   if (isNaN(then)) return "—";
   const mins = Math.floor((Date.now() - then) / 60000);
-  if (mins < 1) return "только что";
-  if (mins < 60) return `${mins} мин назад`;
+  if (mins < 1) return t("time.justNow");
+  if (mins < 60) return t("time.minAgo", mins);
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} ч назад`;
+  if (hrs < 24) return t("time.hoursAgo", hrs);
   const days = Math.floor(hrs / 24);
-  return `${days} дн назад`;
+  return t("time.daysAgo", days);
 }
 
 function _healthState(ch) {
@@ -1624,7 +1628,7 @@ async function loadChannels() {
     const data = await apiFetch("/stats/channel-health");
     list.innerHTML = "";
     if (!data || data.length === 0) {
-      list.innerHTML = "<li style='color:var(--muted);font-size:13px;padding:10px 0;'>Каналов нет</li>";
+      list.innerHTML = `<li style='color:var(--muted);font-size:13px;padding:10px 0;'>${escHtml(t("channels.empty"))}</li>`;
       return;
     }
     data.forEach(ch => {
@@ -1635,9 +1639,9 @@ async function loadChannels() {
         ? `<div class="channel-health-err" title="${escHtml(ch.last_error)}">⚠ ${escHtml(ch.last_error)}</div>`
         : "";
       const offBadge = ch.is_active === false
-        ? `<span class="ch-off-badge">выключен</span>` : "";
-      const toggleLabel = ch.is_active === false ? "Включить" : "Выключить";
-      const toggleBtn = `<button class="btn-ghost-sm ch-toggle" data-action="toggle-channel" data-id="${ch.channel_id}">${toggleLabel}</button>`;
+        ? `<span class="ch-off-badge">${escHtml(t("channels.off"))}</span>` : "";
+      const toggleLabel = ch.is_active === false ? t("channels.enable") : t("channels.disable");
+      const toggleBtn = `<button class="btn-ghost-sm ch-toggle" data-action="toggle-channel" data-id="${ch.channel_id}">${escHtml(toggleLabel)}</button>`;
       li.innerHTML = `
         <div class="channel-health-top">
           <span class="ch-dot ${state}" title="${state}"></span>
@@ -1647,9 +1651,9 @@ async function loadChannels() {
           <button class="channel-remove" data-action="remove-channel" data-id="${ch.channel_id}">✕</button>
         </div>
         <div class="channel-health-meta">
-          <span>Постов: <b>${ch.post_count}</b></span>
-          <span>Непрочитано: <b>${ch.unread_count}</b></span>
-          <span>Сбор: <b>${_fmtAgo(ch.last_fetched_at)}</b></span>
+          <span>${escHtml(t("channels.postsLabel"))}<b>${ch.post_count}</b></span>
+          <span>${escHtml(t("channels.unreadLabel"))}<b>${ch.unread_count}</b></span>
+          <span>${escHtml(t("channels.fetchLabel"))}<b>${_fmtAgo(ch.last_fetched_at)}</b></span>
         </div>
         ${errBlock}
       `;
@@ -1675,7 +1679,7 @@ async function addChannel() {
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
-    toast("Ошибка добавления: " + e.message, "error");
+    toast(t("channels.errAdd") + e.message, "error");
   }
 }
 
@@ -1685,7 +1689,7 @@ async function toggleChannel(id) {
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
-    toast("Не удалось переключить канал: " + e.message, "error");
+    toast(t("channels.errToggle") + e.message, "error");
   }
 }
 
@@ -1696,23 +1700,23 @@ async function removeChannel(id) {
     loadChannels();
     loadChannelsDropdown();
   } catch (e) {
-    toast("Ошибка удаления: " + e.message, "error");
+    toast(t("channels.errRemove") + e.message, "error");
   }
 }
 
 async function importChannels() {
   const btn = document.getElementById("import-btn");
   btn.disabled = true;
-  btn.textContent = "Импортирую…";
+  btn.textContent = t("channels.importing");
   try {
     const data = await apiFetch("/channels/import", { method: "POST" });
     await loadChannels();
     await loadChannelsDropdown();
-    btn.textContent = `Добавлено ${data.imported} из ${data.total}`;
-    setTimeout(() => { btn.textContent = "Импортировать мои каналы"; btn.disabled = false; }, 3000);
+    btn.textContent = t("channels.importedCount", data.imported, data.total);
+    setTimeout(() => { btn.textContent = t("channels.import"); btn.disabled = false; }, 3000);
   } catch (e) {
-    toast("Ошибка импорта: " + e.message, "error");
-    btn.textContent = "Импортировать мои каналы";
+    toast(t("channels.errImport") + e.message, "error");
+    btn.textContent = t("channels.import");
     btn.disabled = false;
   }
 }
@@ -1720,15 +1724,15 @@ async function importChannels() {
 async function syncChannels() {
   const btn = document.getElementById("sync-btn");
   btn.disabled = true;
-  btn.textContent = "Синхронизация…";
+  btn.textContent = t("channels.syncing");
   try {
     await apiFetch("/channels/sync", { method: "POST" });
     setTimeout(() => { loadFeed(); loadChannels(); }, 3000);
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("channels.errSync") + e.message, "error");
   } finally {
     btn.disabled = false;
-    btn.textContent = "Синхронизировать";
+    btn.textContent = t("channels.sync");
   }
 }
 
@@ -1738,24 +1742,26 @@ async function generateDigest() {
   const btn = document.getElementById("gen-digest-btn");
   const box = document.getElementById("digest-box");
   btn.disabled = true;
-  btn.textContent = "Генерирую…";
+  btn.textContent = t("digest.generating");
   box.style.display = "none";
   try {
     const data = await apiFetch("/digest/?hours=24");
-    box.textContent = data.digest_markdown || "Нет новых постов.";
+    box.textContent = data.digest_markdown || t("digest.empty");
     box.style.display = "block";
   } catch (e) {
-    box.textContent = "Ошибка: " + e.message;
+    box.textContent = t("digest.error") + e.message;
     box.style.display = "block";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Сгенерировать сводку";
+    btn.textContent = t("digest.generate");
   }
 }
 
 // ── Schedule ──────────────────────────────────────────────────────────────────
 
-const _TYPE_LABELS = { topics: "Темы", events: "События", collect: "Сбор" };
+function _typeLabel(v) {
+  return { topics: t("schedType.topics"), events: t("schedType.events"), collect: t("schedType.collect") }[v] || v;
+}
 
 async function loadSchedule() {
   const tbody = document.getElementById("sched-tbody");
@@ -1772,31 +1778,31 @@ async function loadSchedule() {
     data.forEach(s => tbody.appendChild(renderSchedRow(s)));
   } catch (e) {
     loader.style.display = "none";
-    tbody.innerHTML = `<tr><td colspan="7" class="table-message">Ошибка: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="table-message">${escHtml(t("schedule.error"))}${escHtml(e.message)}</td></tr>`;
   }
 }
 
 function renderSchedRow(s) {
   const tr = document.createElement("tr");
-  const typeLabel = _TYPE_LABELS[s.schedule_type] || s.schedule_type;
-  const topicsLabel = (s.categories && s.categories.length > 0) ? s.categories.length : "все";
+  const typeLabel = _typeLabel(s.schedule_type);
+  const topicsLabel = (s.categories && s.categories.length > 0) ? s.categories.length : t("schedule.all");
   const lastRun = s.last_run_at
-    ? new Date(s.last_run_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    ? new Date(s.last_run_at).toLocaleString(localeDate(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : "—";
 
   tr.innerHTML = `
     <td class="sched-name">${escHtml(s.name)}</td>
-    <td><span class="type-badge ${s.schedule_type}">${typeLabel}</span></td>
+    <td><span class="type-badge ${s.schedule_type}">${escHtml(typeLabel)}</span></td>
     <td class="cron-text">${escHtml(s.cron_expr)}</td>
     <td class="last-run">${topicsLabel}</td>
     <td>
       <button class="status-btn ${s.status}" data-action="toggle-schedule" data-id="${s.id}">
-        ${s.status === "active" ? "Активно" : "Пауза"}
+        ${s.status === "active" ? escHtml(t("schedule.active")) : escHtml(t("schedule.paused"))}
       </button>
     </td>
     <td class="last-run">${lastRun}</td>
     <td>
-      <button class="row-del-btn" data-action="delete-schedule" data-id="${s.id}" title="Удалить">✕</button>
+      <button class="row-del-btn" data-action="delete-schedule" data-id="${s.id}" title="Delete">✕</button>
     </td>
   `;
   return tr;
@@ -1807,20 +1813,20 @@ async function toggleSchedule(id, btn) {
     const data = await apiFetch(`/schedule/${id}/toggle`, { method: "POST" });
     if (!data) return;
     btn.className = `status-btn ${data.status}`;
-    btn.textContent = data.status === "active" ? "Активно" : "Пауза";
+    btn.textContent = data.status === "active" ? t("schedule.active") : t("schedule.paused");
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("schedule.error") + e.message, "error");
   }
 }
 
 async function deleteSchedule(id) {
-  if (!confirm("Удалить расписание?")) return;
+  if (!confirm(t("schedule.deleteConfirm"))) return;
   try {
     const resp = await fetch(`${API}/schedule/${id}`, { method: "DELETE", credentials: "include", headers: authHeaders() });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     loadSchedule();
   } catch (e) {
-    toast("Ошибка: " + e.message, "error");
+    toast(t("schedule.error") + e.message, "error");
   }
 }
 
@@ -1858,7 +1864,7 @@ function onPresetChange(sel) {
 
 async function createSchedule() {
   const name = document.getElementById("m-name").value.trim();
-  if (!name) { toast("Укажите название", "error"); return; }
+  if (!name) { toast(t("schedule.nameRequired"), "error"); return; }
 
   const schedule_type = document.querySelector(".type-btn.active")?.dataset.type || "topics";
 
@@ -1866,7 +1872,7 @@ async function createSchedule() {
   const cron_expr = presetSel.value === "custom"
     ? document.getElementById("m-cron-custom").value.trim()
     : presetSel.value;
-  if (!cron_expr) { toast("Укажите расписание", "error"); return; }
+  if (!cron_expr) { toast(t("schedule.cronRequired"), "error"); return; }
 
   const hoursRadio = document.querySelector("input[name='m-hours']:checked");
   const hours_back = hoursRadio ? parseInt(hoursRadio.value) : 24;
@@ -1884,6 +1890,6 @@ async function createSchedule() {
     closeSchedModal();
     loadSchedule();
   } catch (e) {
-    toast("Ошибка создания: " + e.message, "error");
+    toast(t("schedule.createError") + e.message, "error");
   }
 }
