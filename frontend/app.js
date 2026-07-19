@@ -418,6 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
     filters.channelId = e.target.value;
     loadFeed();
   });
+  document.getElementById("fav-filter-category").addEventListener("change", loadFavorites);
   document.getElementById("search-btn").addEventListener("click", runSearch);
   document.getElementById("search-input").addEventListener("keydown", e => {
     if (e.key === "Enter") runSearch();
@@ -587,6 +588,7 @@ function navigate(page) {
   if (pageEl) pageEl.classList.add("active");
 
   if (page === "posts") loadFeed();
+  else if (page === "favorites") loadFavorites();
   else if (page === "events") loadEvents();
   else if (page === "stats") loadStats();
   else if (page === "chat") { const i = document.getElementById("chat-input"); if (i) i.focus(); }
@@ -965,7 +967,7 @@ function renderPostRow(post) {
   mainRow.className = "data-row" + (post.is_read ? " is-read" : "");
   mainRow.innerHTML = `
     <td class="cell-check"><input type="checkbox" class="post-row-check" ${selectedPostIds.has(post.id) ? "checked" : ""} /></td>
-    <td class="cell-channel" title="${escHtml(channelName)}">${escHtml(channelShort)}</td>
+    <td class="cell-channel" title="${escHtml(channelName)}">${favStarHtml(post.is_favorite)}${escHtml(channelShort)}</td>
     <td><div class="cell-dots"><div class="dot ${dot1}"></div><div class="dot ${dot2}"></div></div></td>
     <td class="cell-post" title="${escHtml(rawText.slice(0, 300))}">${escHtml(preview)}</td>
     <td class="cell-topics">${post.category ? `<span class="topic-tag">${escHtml(categoryLabel(post.category))}</span>` : ""}${dupBadge}</td>
@@ -979,6 +981,8 @@ function renderPostRow(post) {
     else selectedPostIds.delete(post.id);
     updatePostsSelectAllState();
   });
+
+  wireFavStar(mainRow, post.id, -1, post.is_favorite, next => { post.is_favorite = next; });
 
   const badgeEl = mainRow.querySelector(".dup-badge");
   if (badgeEl) {
@@ -1065,6 +1069,153 @@ function closeClusterModal(e) {
   if (e && e.target && e.target.id !== "cluster-modal" && e.target.id !== "cluster-modal-close") return;
   const modal = document.getElementById("cluster-modal");
   if (modal) modal.style.display = "none";
+}
+
+// ── Favorites ────────────────────────────────────────────────────────────────
+function favStarHtml(isFavorite) {
+  return `<button type="button" class="fav-star${isFavorite ? " active" : ""}" title="${escHtml(t(isFavorite ? "posts.favRemove" : "posts.favAdd"))}">${isFavorite ? "★" : "☆"}</button>`;
+}
+
+// Wires the ★/☆ button rendered by favStarHtml() inside `rowEl` to toggle a
+// post (eventIndex = -1) or a specific favorited event (eventIndex >= 0).
+// `onChange(nextState)` lets the caller keep its in-memory item in sync so a
+// later re-render of the same row (e.g. re-opening the detail panel) shows
+// the current state without a full reload.
+function wireFavStar(rowEl, postId, eventIndex, isFavorite, onChange) {
+  const btn = rowEl.querySelector(".fav-star");
+  if (!btn) return;
+  let current = isFavorite;
+  btn.addEventListener("click", async e => {
+    e.stopPropagation();
+    btn.disabled = true;
+    try {
+      const next = await toggleFavorite(postId, eventIndex);
+      current = next;
+      btn.classList.toggle("active", next);
+      btn.textContent = next ? "★" : "☆";
+      btn.title = t(next ? "posts.favRemove" : "posts.favAdd");
+      if (onChange) onChange(next);
+      toast(t(next ? "favorites.added" : "favorites.removed"), "success");
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  return () => current;
+}
+
+async function toggleFavorite(postId, eventIndex = -1) {
+  const res = await apiFetch("/favorites/toggle", {
+    method: "POST",
+    body: JSON.stringify({ post_id: postId, event_index: eventIndex }),
+  });
+  return !!(res && res.is_favorite);
+}
+
+async function loadFavorites() {
+  const list = document.getElementById("favorites-list");
+  const loader = document.getElementById("favorites-loader");
+  const empty = document.getElementById("favorites-empty");
+  if (!list) return;
+  list.innerHTML = "";
+  loader.style.display = "block";
+  empty.style.display = "none";
+
+  const category = document.getElementById("fav-filter-category").value;
+
+  try {
+    const postsUrl = "/favorites/posts" + (category ? `?category=${encodeURIComponent(category)}` : "");
+    const [posts, eventsRes] = await Promise.all([
+      apiFetch(postsUrl),
+      apiFetch("/favorites/events"),
+    ]);
+    loader.style.display = "none";
+
+    let events = (eventsRes && eventsRes.events) || [];
+    if (category) events = events.filter(ev => ev.post_category === category);
+
+    if ((!posts || posts.length === 0) && events.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+
+    renderFavoritesList(list, posts || [], events);
+  } catch (e) {
+    loader.style.display = "none";
+    list.innerHTML = `<div class="table-message">${escHtml(t("favorites.errLoading"))}${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderFavoritesList(container, posts, events) {
+  const byCategory = new Map();
+  const bucket = cat => {
+    const key = cat || "Прочее";
+    if (!byCategory.has(key)) byCategory.set(key, { posts: [], events: [] });
+    return byCategory.get(key);
+  };
+  posts.forEach(p => bucket(p.category).posts.push(p));
+  events.forEach(ev => bucket(ev.post_category).events.push(ev));
+
+  for (const [category, items] of byCategory) {
+    const group = document.createElement("div");
+    group.className = "fav-group";
+    group.innerHTML = `<h3 class="fav-group-title">${escHtml(categoryLabel(category))}</h3>`;
+
+    if (items.posts.length) {
+      const sub = document.createElement("div");
+      sub.className = "fav-subgroup-title";
+      sub.textContent = t("favorites.posts");
+      group.appendChild(sub);
+      items.posts.forEach(post => group.appendChild(renderFavoritePostCard(post)));
+    }
+    if (items.events.length) {
+      const sub = document.createElement("div");
+      sub.className = "fav-subgroup-title";
+      sub.textContent = t("favorites.events");
+      group.appendChild(sub);
+      items.events.forEach(ev => group.appendChild(renderFavoriteEventCard(ev)));
+    }
+    container.appendChild(group);
+  }
+}
+
+function renderFavoritePostCard(post) {
+  const card = document.createElement("div");
+  card.className = "fav-card";
+  const channelName = post.channel_title || post.channel_username || "—";
+  const summary = (post.summary || post.text || "").slice(0, 200);
+  const date = new Date(post.published_at).toLocaleDateString(localeDate(), { day: "2-digit", month: "2-digit", year: "numeric" });
+  const tgLink = post.channel_username ? sanitizeUrl(`https://t.me/${post.channel_username}/${post.telegram_message_id}`) : null;
+  card.innerHTML = `
+    ${favStarHtml(true)}
+    <div class="fav-card-body">
+      <div class="fav-card-head"><b>${escHtml(channelName)}</b> <span class="fav-card-date">${date}</span></div>
+      <div class="fav-card-text">${escHtml(summary)}</div>
+      ${tgLink ? `<a class="detail-link" href="${escHtml(tgLink)}" target="_blank" rel="noopener">${escHtml(t("posts.readMore"))}</a>` : ""}
+    </div>
+  `;
+  wireFavStar(card, post.id, -1, true, next => { if (!next) card.remove(); });
+  return card;
+}
+
+function renderFavoriteEventCard(ev) {
+  const card = document.createElement("div");
+  card.className = "fav-card";
+  const date = ev.date
+    ? new Date(ev.date + "T00:00:00").toLocaleDateString(localeDate(), { day: "2-digit", month: "2-digit", year: "numeric" })
+    : "—";
+  const safeEvLink = sanitizeUrl(ev.link);
+  card.innerHTML = `
+    ${favStarHtml(true)}
+    <div class="fav-card-body">
+      <div class="fav-card-head"><b>${escHtml(ev.name || "—")}</b> <span class="fav-card-date">${date}${ev.time ? " " + escHtml(ev.time) : ""}</span></div>
+      <div class="fav-card-text">${escHtml(ev.channel_title || "")}${ev.location ? " · " + escHtml(ev.location) : ""}</div>
+      ${safeEvLink ? `<a class="detail-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">${escHtml(t("events.readMore"))}</a>` : ""}
+    </div>
+  `;
+  wireFavStar(card, ev.post_id, ev.event_index, true, next => { if (!next) card.remove(); });
+  return card;
 }
 
 // ── Unread tracking ───────────────────────────────────────────────────────────
@@ -1545,6 +1696,7 @@ function renderEventRow(ev) {
     <td class="cell-evdate">${dateStr}${timeStr ? `<br><span class="ev-time">${timeStr}</span>` : ""}</td>
     <td class="cell-evname">
       <span class="ev-expand-icon">&#9660;</span>
+      ${favStarHtml(ev.is_favorite)}
       ${safeEvLink ? `<a class="ev-name-link" href="${escHtml(safeEvLink)}" target="_blank" rel="noopener">${escHtml(name)}</a>` : escHtml(name)}
     </td>
     <td class="cell-evtopics">${topics}</td>
@@ -1557,6 +1709,10 @@ function renderEventRow(ev) {
 
   const checkCell = mainRow.querySelector(".cell-evcheck");
   checkCell.addEventListener("click", e => e.stopPropagation());
+
+  if (ev.post_id != null && ev.event_index != null) {
+    wireFavStar(mainRow, ev.post_id, ev.event_index, ev.is_favorite, next => { ev.is_favorite = next; });
+  }
   mainRow.querySelector(".ev-row-check").addEventListener("change", e => {
     if (e.target.checked) selectedEventKeys.add(ev._evKey);
     else selectedEventKeys.delete(ev._evKey);

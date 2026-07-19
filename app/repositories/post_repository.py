@@ -300,6 +300,7 @@ async def get_recent_for_category(
     """Latest (Post, channel_title) rows, optionally filtered by category."""
     stmt = (
         select(
+            Post.id,
             Post.text,
             Post.summary,
             Post.published_at,

@@ -24,6 +24,12 @@ from bot.handlers.channels import (
     remove_channel,
 )
 from bot.handlers.digest import digest_now, filter_by_category, show_events
+from bot.handlers.favorites import (
+    favorites_menu_callback,
+    list_favorites,
+    toggle_favorite_event_callback,
+    toggle_favorite_post_callback,
+)
 from bot.handlers.recent import recent_posts
 from bot.handlers.search import search_next_page, search_posts
 from bot.handlers.settings import (
@@ -108,6 +114,7 @@ def main() -> None:
     app.add_handler(CommandHandler("removechannel", require_approved(remove_channel)))
     app.add_handler(CommandHandler("import", require_approved(import_channels)))
     app.add_handler(CommandHandler("alert", require_approved(manage_alerts)))
+    app.add_handler(CommandHandler("favorites", require_approved(list_favorites)))
 
     app.add_handler(CallbackQueryHandler(approve_user_callback, pattern="^approve_user_"))
     app.add_handler(CallbackQueryHandler(require_approved(digest_now), pattern="^digest_now$"))
@@ -121,6 +128,9 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(require_approved(set_model), pattern="^set_model_"))
     app.add_handler(CallbackQueryHandler(require_approved(filter_by_category), pattern="^filter_"))
     app.add_handler(CallbackQueryHandler(require_approved(search_next_page), pattern="^search_next$"))
+    app.add_handler(CallbackQueryHandler(require_approved(toggle_favorite_post_callback), pattern="^favtoggle:"))
+    app.add_handler(CallbackQueryHandler(require_approved(toggle_favorite_event_callback), pattern="^favtoggleev:"))
+    app.add_handler(CallbackQueryHandler(require_approved(favorites_menu_callback), pattern="^favorites_menu$"))
 
     # Pending users can redeem an invite code by typing it as a plain message;
     # no-ops for anyone approved or any text that isn't an 8-hex-char code.

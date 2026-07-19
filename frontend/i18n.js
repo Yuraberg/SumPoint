@@ -36,6 +36,7 @@ const I18N = {
 
     "nav.section.field": "Feed",
     "nav.posts": "Posts",
+    "nav.favorites": "Favorites",
     "nav.digest": "Digests",
     "nav.events": "Events",
     "nav.stats": "Statistics",
@@ -91,6 +92,17 @@ const I18N = {
     "posts.dupBadgeTitle": "This story is in %s channels — show sources",
     "posts.dupBadge": "⧉ %s channels",
     "posts.errSearch": "Search error: ",
+    "posts.favAdd": "Add to favorites",
+    "posts.favRemove": "Remove from favorites",
+
+    "favorites.title": "FAVORITES",
+    "favorites.subtitle": "Posts and events you've bookmarked, grouped by topic",
+    "favorites.posts": "Posts",
+    "favorites.events": "Events",
+    "favorites.empty": "No favorites yet. Click ★ on a post or event to save it here.",
+    "favorites.errLoading": "Loading error: ",
+    "favorites.added": "Added to favorites",
+    "favorites.removed": "Removed from favorites",
 
     "digest.title": "DIGESTS",
     "digest.subtitle": "Daily digest of your channels",
@@ -277,6 +289,7 @@ const I18N = {
 
     "nav.section.field": "Инфополе",
     "nav.posts": "Посты",
+    "nav.favorites": "Избранное",
     "nav.digest": "Сводки",
     "nav.events": "События",
     "nav.stats": "Статистика",
@@ -332,6 +345,17 @@ const I18N = {
     "posts.dupBadgeTitle": "Эта новость в %s каналах — показать источники",
     "posts.dupBadge": "⧉ %s каналах",
     "posts.errSearch": "Ошибка поиска: ",
+    "posts.favAdd": "В избранное",
+    "posts.favRemove": "Убрать из избранного",
+
+    "favorites.title": "ИЗБРАННОЕ",
+    "favorites.subtitle": "Посты и события, добавленные в избранное, сгруппированы по темам",
+    "favorites.posts": "Посты",
+    "favorites.events": "События",
+    "favorites.empty": "В избранном пока пусто. Нажмите ★ на посте или событии, чтобы сохранить его здесь.",
+    "favorites.errLoading": "Ошибка загрузки: ",
+    "favorites.added": "Добавлено в избранное",
+    "favorites.removed": "Убрано из избранного",
 
     "digest.title": "СВОДКИ",
     "digest.subtitle": "Ежедневный дайджест ваших каналов",

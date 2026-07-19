@@ -6,9 +6,10 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.database import AsyncSessionLocal
-from app.repositories import post_repository
+from app.repositories import favorite_repository, post_repository
 from app.services.ai_engine import generate_embedding
 from app.utils.text import truncate
+from bot.handlers.favorites import favorite_toggle_row
 
 logger = logging.getLogger(__name__)
 
@@ -71,22 +72,25 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
             # to pgvector semantic search.
             if not rows and offset == 0:
                 rows = await _semantic_search(db, user_id, query_text)
+
+            if not rows:
+                text_out = (
+                    f"🔍 По запросу *{query_text}* больше ничего не найдено."
+                    if offset > 0
+                    else f"🔍 По запросу *{query_text}* ничего не найдено."
+                )
+                await message.reply_text(text_out, parse_mode="Markdown")
+                return
+
+            post_ids = [(getattr(row, "Post", None) or row).id for row in rows]
+            favorite_ids = await favorite_repository.get_favorite_post_ids(db, user_id, post_ids)
     except Exception:
         logger.exception("Search failed for query %r", query_text)
         await message.reply_text("⚠️ Ошибка поиска. Попробуйте позже.")
         return
 
-    if not rows:
-        text_out = (
-            f"🔍 По запросу *{query_text}* больше ничего не найдено."
-            if offset > 0
-            else f"🔍 По запросу *{query_text}* ничего не найдено."
-        )
-        await message.reply_text(text_out, parse_mode="Markdown")
-        return
-
     lines = [f"🔍 *Результаты поиска:* «{query_text}»\n"]
-    for row in rows:
+    for i, row in enumerate(rows, start=1):
         channel = row.channel_title or "—"
         post = getattr(row, "Post", None)
         summary = ((post.summary if post else row.summary) or (post.text if post else row.text) or "")[:200]
@@ -96,18 +100,18 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
         sim = getattr(row, "similarity", None)
         if sim is not None:
             pct = max(0, min(1, 1 - float(sim)))  # distance → similarity
-            lines.append(f"• *{channel}* [{cat}]  `{pct:.0%}`\n  {summary}\n  _{date}_\n")
+            lines.append(f"{i}. *{channel}* [{cat}]  `{pct:.0%}`\n  {summary}\n  _{date}_\n")
         else:
-            lines.append(f"• *{channel}* [{cat}]\n  {summary}\n  _{date}_\n")
+            lines.append(f"{i}. *{channel}* [{cat}]\n  {summary}\n  _{date}_\n")
 
     text_out = truncate("\n".join(lines))
 
     context.user_data["search_state"] = {"query_text": query_text, "category": category, "offset": offset}
-    reply_markup = None
+    kb_rows = [favorite_toggle_row([(pid, pid in favorite_ids) for pid in post_ids])]
     if len(rows) == _PAGE_SIZE:
-        reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("▶️ Ещё", callback_data="search_next")]])
+        kb_rows.append([InlineKeyboardButton("▶️ Ещё", callback_data="search_next")])
 
-    await message.reply_text(text_out, parse_mode="Markdown", reply_markup=reply_markup)
+    await message.reply_text(text_out, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb_rows))
 
 
 async def _semantic_search(db, user_id: int, query: str, limit: int = _PAGE_SIZE) -> list:

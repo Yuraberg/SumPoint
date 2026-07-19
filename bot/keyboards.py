@@ -31,6 +31,7 @@ def main_menu_keyboard(*, with_web_app: bool = True) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🌅 Утренний дайджест", callback_data="toggle_morning"),
             InlineKeyboardButton("🌆 Вечерний дайджест", callback_data="toggle_evening"),
         ],
+        [InlineKeyboardButton("⭐ Избранное", callback_data="favorites_menu")],
         [InlineKeyboardButton("⚙️ Настройки", callback_data="settings")],
     ]
     if with_web_app:

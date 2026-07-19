@@ -18,6 +18,7 @@ class PostOut(BaseModel):
     channel_title: str | None = None
     similarity: float | None = None  # cosine distance for semantic search
     is_read: bool = False
+    is_favorite: bool = False
     cluster_id: int | None = None
     cluster_size: int = 1  # distinct channels sharing this post's duplicate-cluster
 

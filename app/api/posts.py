@@ -13,7 +13,7 @@ from app.api.deps import CurrentUser
 from app.database import get_db
 from app.models.post import Post
 from app.rate_limit import limiter
-from app.repositories import post_repository
+from app.repositories import favorite_repository, post_repository
 from app.repositories.post_repository import (
     escape_like as _escape_like,  # noqa: F401  (re-exported)
 )
@@ -28,7 +28,8 @@ class MarkReadIn(BaseModel):
 
 
 def _to_post_out(post: Post, channel_username: str | None, channel_title: str | None,
-                 similarity: float | None = None, cluster_size: int | None = None) -> PostOut:
+                 similarity: float | None = None, cluster_size: int | None = None,
+                 favorite_post_ids: set[int] | None = None) -> PostOut:
     return PostOut(
         id=post.id,
         channel_id=post.channel_id,
@@ -43,6 +44,7 @@ def _to_post_out(post: Post, channel_username: str | None, channel_title: str | 
         channel_title=channel_title,
         similarity=similarity,
         is_read=getattr(post, "read_at", None) is not None,
+        is_favorite=post.id in favorite_post_ids if favorite_post_ids else False,
         cluster_id=getattr(post, "cluster_id", None),
         cluster_size=max(cluster_size or 1, 1),
     )
@@ -67,9 +69,12 @@ async def list_posts(
         unread_only=unread_only,
         limit=limit, offset=offset,
     )
+    favorite_ids = await favorite_repository.get_favorite_post_ids(
+        db, current_user.id, [row.Post.id for row in rows]
+    )
     return [
         _to_post_out(row.Post, row.channel_username, row.channel_title,
-                     cluster_size=row.cluster_size)
+                     cluster_size=row.cluster_size, favorite_post_ids=favorite_ids)
         for row in rows
     ]
 
@@ -203,7 +208,13 @@ async def search_posts(
     limit: int = Query(20, le=100),
 ):
     rows = await post_repository.keyword_search(db, current_user.id, q, limit=limit)
-    return [_to_post_out(row.Post, row.channel_username, row.channel_title) for row in rows]
+    favorite_ids = await favorite_repository.get_favorite_post_ids(
+        db, current_user.id, [row.Post.id for row in rows]
+    )
+    return [
+        _to_post_out(row.Post, row.channel_username, row.channel_title, favorite_post_ids=favorite_ids)
+        for row in rows
+    ]
 
 
 @router.get("/semantic-search", response_model=list[PostOut])
@@ -218,6 +229,9 @@ async def semantic_search_posts(
     """Semantic search: embed query with BGE-M3 via Ollama, then pgvector cosine search."""
     embedding = await generate_embedding(q)
     rows = await post_repository.semantic_search(db, current_user.id, embedding, limit=limit)
+    favorite_ids = await favorite_repository.get_favorite_post_ids(
+        db, current_user.id, [row.id for row in rows]
+    )
 
     results = []
     for row in rows:
@@ -237,6 +251,7 @@ async def semantic_search_posts(
             _to_post_out(
                 post, row.channel_username, row.channel_title,
                 similarity=round(float(row.similarity), 4),
+                favorite_post_ids=favorite_ids,
             )
         )
     return results

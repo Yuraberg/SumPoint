@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import DEFAULT_DIGEST_HOURS  # noqa: F401  (kept for parity)
-from app.repositories import post_repository
+from app.repositories import favorite_repository, post_repository
 
 _DEFAULT_DAYS_AHEAD = 7
 
@@ -19,6 +19,8 @@ class _EventContext:
     channel_title: str | None
     channel_username: str | None
     post_category: str | None
+    post_id: int
+    event_index: int
 
 
 async def get_upcoming_events(
@@ -40,7 +42,7 @@ async def get_upcoming_events(
     collected: list[_EventContext] = []
     for row in rows:
         post_events = row.events if isinstance(row.events, list) else []
-        for ev in post_events:
+        for idx, ev in enumerate(post_events):
             if not isinstance(ev, dict):
                 continue
 
@@ -57,6 +59,8 @@ async def get_upcoming_events(
                     channel_title=row.channel_title,
                     channel_username=row.channel_username,
                     post_category=row.category,
+                    post_id=row.id,
+                    event_index=idx,
                 )
             )
 
@@ -67,6 +71,7 @@ async def get_upcoming_events(
         return name, (ctx.event.get("date") or "")
 
     mention_counts: Counter = Counter(_key(c) for c in collected if c.event.get("name"))
+    favorite_keys = await favorite_repository.get_favorite_event_keys(db, user_id)
 
     seen: set[tuple[str, str]] = set()
     result: list[dict] = []
@@ -83,6 +88,36 @@ async def get_upcoming_events(
         clean["channel_username"] = ctx.channel_username
         clean["post_category"] = ctx.post_category
         clean["mentions"] = mention_counts.get(key, 1) if name else 1
+        # Identifies this specific (deduped, representative) occurrence for the
+        # favorite-toggle endpoint — see app/models/favorite.py.
+        clean["post_id"] = ctx.post_id
+        clean["event_index"] = ctx.event_index
+        clean["is_favorite"] = (ctx.post_id, ctx.event_index) in favorite_keys
+        result.append(clean)
+
+    result.sort(key=lambda e: e.get("date") or "9999-12-31")
+    return result
+
+
+async def get_favorite_events(db: AsyncSession, user_id: int) -> list[dict]:
+    """Events the user has explicitly favorited — unlike ``get_upcoming_events``
+    this isn't windowed to the next few days and isn't cross-channel deduped,
+    since each row is a distinct, individually-favorited occurrence."""
+    rows = await favorite_repository.list_favorite_events(db, user_id)
+
+    result: list[dict] = []
+    for row in rows:
+        events = row.Post.events if isinstance(row.Post.events, list) else []
+        if not (0 <= row.event_index < len(events)) or not isinstance(events[row.event_index], dict):
+            continue  # stale favorite pointing past the (never-mutated) events array
+        clean = {k: v for k, v in events[row.event_index].items() if not k.startswith("_")}
+        clean["channel_title"] = row.channel_title
+        clean["channel_username"] = row.channel_username
+        clean["post_category"] = row.Post.category
+        clean["post_id"] = row.Post.id
+        clean["event_index"] = row.event_index
+        clean["is_favorite"] = True
+        clean["favorited_at"] = row.favorited_at
         result.append(clean)
 
     result.sort(key=lambda e: e.get("date") or "9999-12-31")

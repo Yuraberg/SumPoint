@@ -99,6 +99,9 @@
           <span class="nav-icon">&#9783;</span> <span data-i18n="nav.posts">Posts</span>
           <span id="unread-badge" class="unread-badge" style="display:none">0</span>
         </a>
+        <a href="#" class="nav-item" data-page="favorites">
+          <span class="nav-icon">&#9733;</span> <span data-i18n="nav.favorites">Favorites</span>
+        </a>
         <a href="#" class="nav-item" data-page="digest">
           <span class="nav-icon">&#9776;</span> <span data-i18n="nav.digest">Digests</span>
         </a>
@@ -237,6 +240,45 @@
         <div class="kbd-hint" data-i18n-html="posts.kbdHint">
           Navigation: <kbd>j</kbd>/<kbd>k</kbd> — through posts, <kbd>o</kbd>/<kbd>Enter</kbd> — expand,
           <kbd>/</kbd> — search, <kbd>Esc</kbd> — close.
+        </div>
+      </div>
+
+      <!-- FAVORITES -->
+      <div class="page" id="page-favorites">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title" data-i18n="favorites.title">FAVORITES</h1>
+            <p class="page-subtitle" data-i18n="favorites.subtitle">Posts and events you've bookmarked, grouped by topic</p>
+          </div>
+        </div>
+
+        <div class="filters-bar">
+          <div class="filter-group">
+            <label data-i18n="filter.topics">TOPICS</label>
+            <select id="fav-filter-category" class="filter-select">
+              <option value="" data-i18n="filter.allTopics">All topics</option>
+              <option value="Технологии">Технологии</option>
+              <option value="Разработка">Разработка</option>
+              <option value="Бизнес">Бизнес</option>
+              <option value="Вакансии">Вакансии</option>
+              <option value="События">События</option>
+              <option value="Политика">Политика</option>
+              <option value="Развлечения">Развлечения</option>
+              <option value="Умный дом">Умный дом</option>
+              <option value="Наука">Наука</option>
+              <option value="Рынки">Рынки</option>
+              <option value="Покупки">Покупки</option>
+              <option value="Личное">Личное</option>
+              <option value="Реклама">Реклама</option>
+              <option value="Прочее">Прочее</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="favorites-list" class="favorites-list"></div>
+        <div id="favorites-loader" class="table-message" style="display:none" data-i18n="common.loading">Loading…</div>
+        <div id="favorites-empty" class="table-message" style="display:none" data-i18n="favorites.empty">
+          No favorites yet. Click ★ on a post or event to save it here.
         </div>
       </div>
 

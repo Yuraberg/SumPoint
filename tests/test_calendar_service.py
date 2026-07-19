@@ -20,10 +20,14 @@ def _row(events, category="Технологии", title="Ch", username="ch"):
     )
 
 
-def _patch_feed(monkeypatch, rows):
+def _patch_feed(monkeypatch, rows, favorite_keys=frozenset()):
     async def fake_feed(db, user_id):
         return rows
     monkeypatch.setattr(calendar_service.post_repository, "get_events_feed", fake_feed)
+
+    async def fake_favorite_keys(db, user_id):
+        return set(favorite_keys)
+    monkeypatch.setattr(calendar_service.favorite_repository, "get_favorite_event_keys", fake_favorite_keys)
 
 
 def _iso(d: date) -> str:
@@ -127,3 +131,77 @@ async def test_bad_date_string_kept_and_sorted_last(monkeypatch):
     assert "Хорошая" in names and "Плохая дата" in names
     # Unparseable date is not filtered out and sorts to the end.
     assert names[0] == "Хорошая"
+
+
+@pytest.mark.asyncio
+async def test_events_carry_post_id_and_index_for_favoriting(monkeypatch):
+    soon = date.today() + timedelta(days=1)
+    rows = [_row([
+        {"name": "A", "date": _iso(soon)},
+        {"name": "B", "date": _iso(soon)},
+    ])]
+    _patch_feed(monkeypatch, rows)
+    events = await calendar_service.get_upcoming_events(None, user_id=1, days_ahead=7)
+    by_name = {e["name"]: e for e in events}
+    assert by_name["A"]["post_id"] == 1 and by_name["A"]["event_index"] == 0
+    assert by_name["B"]["post_id"] == 1 and by_name["B"]["event_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_is_favorite_annotated_from_favorite_keys(monkeypatch):
+    soon = date.today() + timedelta(days=1)
+    rows = [_row([{"name": "Избранное", "date": _iso(soon)}, {"name": "Обычное", "date": _iso(soon)}])]
+    _patch_feed(monkeypatch, rows, favorite_keys={(1, 0)})
+    events = await calendar_service.get_upcoming_events(None, user_id=1, days_ahead=7)
+    by_name = {e["name"]: e for e in events}
+    assert by_name["Избранное"]["is_favorite"] is True
+    assert by_name["Обычное"]["is_favorite"] is False
+
+
+class _FakePost:
+    def __init__(self, id, events, category="Технологии"):
+        self.id = id
+        self.events = events
+        self.category = category
+
+
+def _fav_row(post_id, events, event_index, *, title="Ch", username="ch", category="Технологии", favorited_at="t"):
+    return SimpleNamespace(
+        Post=_FakePost(post_id, events, category=category),
+        event_index=event_index,
+        channel_title=title,
+        channel_username=username,
+        favorited_at=favorited_at,
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_favorite_events_extracts_event_by_index(monkeypatch):
+    events = [{"name": "Первое", "date": "2026-08-01"}, {"name": "Второе", "date": "2026-08-02"}]
+    rows = [_fav_row(1, events, 1)]
+
+    async def fake_list(db, user_id):
+        return rows
+    monkeypatch.setattr(calendar_service.favorite_repository, "list_favorite_events", fake_list)
+
+    result = await calendar_service.get_favorite_events(None, user_id=1)
+    assert len(result) == 1
+    assert result[0]["name"] == "Второе"
+    assert result[0]["is_favorite"] is True
+    assert result[0]["post_id"] == 1
+    assert result[0]["event_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_favorite_events_skips_stale_out_of_range_index(monkeypatch):
+    """A favorite pointing past the events array (e.g. the post was re-processed
+    with fewer events, which never happens today but is cheap to guard) is
+    silently dropped rather than raising an IndexError."""
+    rows = [_fav_row(1, [{"name": "Только одно", "date": "2026-08-01"}], event_index=5)]
+
+    async def fake_list(db, user_id):
+        return rows
+    monkeypatch.setattr(calendar_service.favorite_repository, "list_favorite_events", fake_list)
+
+    result = await calendar_service.get_favorite_events(None, user_id=1)
+    assert result == []
