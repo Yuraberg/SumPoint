@@ -70,6 +70,7 @@ async def test_user_idempotency(db):
     assert user2.id == 42
     assert user2.first_name == "Alice_Updated"  # should refresh
     assert user2.username == "alice2"
+    assert user2.chat_id == 2
 
 
 @pytest.mark.integration
@@ -94,7 +95,6 @@ async def test_digest_subscribers_excludes_users_without_chat_id(db):
 
     assert 555002 in subscriber_ids
     assert 555001 not in subscriber_ids
-    assert user2.chat_id == 2
 
 
 @pytest.mark.integration
