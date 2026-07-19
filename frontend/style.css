@@ -89,11 +89,8 @@ body {
 }
 .login-brand { display: flex; align-items: center; gap: 10px; }
 .login-mark {
-  width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
-  background: linear-gradient(145deg, var(--accent), var(--accent-dark));
-  display: grid; place-items: center;
-  color: #fff; font-family: var(--font-serif); font-size: 17px; line-height: 1;
-  box-shadow: 0 2px 8px -2px rgba(217,119,87,.6);
+  width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
+  box-shadow: 0 2px 8px -2px rgba(30,58,138,.6);
 }
 .login-wordmark {
   font-family: var(--font-serif); font-size: 20px; color: var(--text); letter-spacing: -.2px;
@@ -128,14 +125,18 @@ body {
 }
 
 .sidebar-logo {
-  padding: 20px 20px 18px;
+  padding: 16px 20px 14px;
   font-family: var(--font-serif);
   font-size: 1.2rem;
   font-weight: 400;
   color: #f4f1ea;
   letter-spacing: -0.2px;
   border-bottom: 1px solid var(--sb-border);
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
+.sidebar-logo-mark { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; }
 
 .sidebar-nav {
   flex: 1;
