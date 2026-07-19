@@ -70,6 +70,30 @@ async def test_user_idempotency(db):
     assert user2.id == 42
     assert user2.first_name == "Alice_Updated"  # should refresh
     assert user2.username == "alice2"
+
+
+@pytest.mark.integration
+async def test_digest_subscribers_excludes_users_without_chat_id(db):
+    """A web-only signup (Login Widget / magic link / Mini App) never gets a
+    chat_id — only the bot's /start handler sets it. digest_morning defaults
+    to True regardless of signup flow, so without this filter such a user
+    would be queried here every slot and fail permanently with Telegram's
+    "Chat not found" (see app/repositories/user_repository.py)."""
+    from app.repositories import user_repository
+
+    await user_repository.get_or_create(
+        db, user_id=555001, first_name="WebOnly", chat_id=None,
+    )
+    await user_repository.get_or_create(
+        db, user_id=555002, first_name="BotUser", chat_id=555002,
+    )
+    await db.flush()
+
+    subscribers = await user_repository.get_digest_subscribers(db, "morning")
+    subscriber_ids = {u.id for u in subscribers}
+
+    assert 555002 in subscriber_ids
+    assert 555001 not in subscriber_ids
     assert user2.chat_id == 2
 
 
