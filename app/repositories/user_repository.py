@@ -96,6 +96,17 @@ async def login_or_signup(
 
 
 async def get_digest_subscribers(db: AsyncSession, slot: str) -> list[User]:
-    """Users opted in to the given digest slot ('morning' | 'evening')."""
+    """Users opted in to the given digest slot ('morning' | 'evening').
+
+    Requires ``chat_id`` to be set: it's only populated by the bot's /start
+    handler, never by the web login flows (Login Widget / magic link / Mini
+    App). ``digest_morning`` defaults to True for every new user regardless of
+    which flow they signed up through, so a web-only user who never messaged
+    the bot would otherwise be queried here every single slot and fail with
+    Telegram's "Chat not found" — permanently, since they can't receive a DM
+    from a chat that doesn't exist yet.
+    """
     field = User.digest_morning if slot == "morning" else User.digest_evening
-    return (await db.execute(select(User).where(field.is_(True)))).scalars().all()
+    return (
+        await db.execute(select(User).where(field.is_(True), User.chat_id.is_not(None)))
+    ).scalars().all()
