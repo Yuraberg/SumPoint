@@ -1,7 +1,6 @@
 /* ── i18n dictionary + helpers ────────────────────────────────────────────────
-   English is the default for new visitors (project targets an English-speaking
-   audience); Russian remains available via the toggle for existing users.
-   Category/event-type <option> VALUES stay in Russian everywhere — they are
+   Russian is the default for new visitors; English remains available via the
+   toggle. Category/event-type <option> VALUES stay in Russian everywhere — they are
    literal values the backend AI classifier/extractor writes to the DB and
    filters on (see app/prompts/classification.py, app/prompts/event_extraction.py).
    Only their on-screen LABELS are translated, via CATEGORY_LABELS / EVENT_TYPE_LABELS. */
@@ -525,7 +524,7 @@ const EVENT_TYPE_LABELS = {
   },
 };
 
-let lang = localStorage.getItem("sp_lang") || "en";
+let lang = localStorage.getItem("sp_lang") || "ru";
 
 function t(key, ...args) {
   let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;

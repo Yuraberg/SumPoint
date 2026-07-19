@@ -173,12 +173,21 @@ if os.path.isdir(frontend_dir):
         file_path = os.path.realpath(os.path.join(base_dir, safe_path))
         if not (file_path == base_dir or file_path.startswith(base_dir + os.sep)):
             raise HTTPException(status_code=404, detail="Not Found")
+        # Frontend files aren't content-hashed, so a browser's default heuristic
+        # caching (based only on Last-Modified, with no explicit Cache-Control)
+        # can serve a stale index.html/app.js/i18n.js after a deploy — e.g. an
+        # old index.html without <script src="i18n.js"> paired with a fresh
+        # app.js that calls i18n functions, silently breaking features like the
+        # language toggle with no visible error. `no-cache` forces a revalidation
+        # round-trip (still cheap: FileResponse sets ETag/Last-Modified, so an
+        # unchanged file gets a 304) instead of ever serving a stale copy outright.
+        no_cache_headers = {"Cache-Control": "no-cache"}
         if os.path.isfile(file_path):
-            return FileResponse(file_path)
+            return FileResponse(file_path, headers=no_cache_headers)
 
         # SPA fallback — return index.html for any unknown path
         index_path = os.path.join(frontend_dir, "index.html")
         if os.path.isfile(index_path):
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=no_cache_headers)
 
         raise HTTPException(status_code=404, detail="Not Found")
