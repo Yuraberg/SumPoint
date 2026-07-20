@@ -80,13 +80,20 @@ def _strip_thought(raw: str) -> str:
     return clean.strip()
 
 
-async def _call(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None) -> str:
-    """Send a prompt to DeepSeek and return the text response."""
-    response = await _get_client().chat.completions.create(
+async def _call_raw(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None):
+    """Send a prompt to DeepSeek and return the raw completion object — lets
+    callers that care (e.g. the digest) inspect ``finish_reason`` instead of
+    just the text, to tell a genuine answer from one cut off by max_tokens."""
+    return await _get_client().chat.completions.create(
         model=model or MODEL,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
+
+
+async def _call(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None) -> str:
+    """Send a prompt to DeepSeek and return the text response."""
+    response = await _call_raw(prompt, max_tokens=max_tokens, model=model)
     return response.choices[0].message.content.strip()
 
 
@@ -113,6 +120,17 @@ async def answer_from_context(question: str, context: str, model: str | None = N
     return _strip_thought(response.choices[0].message.content.strip())
 
 
+DIGEST_MAX_TOKENS = 8192
+
+
+def _trim_incomplete_tail(text: str) -> str:
+    """Drop the last line of a completion that was cut off by max_tokens — it's
+    reliably mid-sentence (or mid-Markdown-entity, e.g. a bare "- Channel: <"),
+    never a bullet worth keeping."""
+    idx = text.rstrip().rfind("\n")
+    return text[:idx].rstrip() if idx != -1 else ""
+
+
 async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
     """Public entry point for digest assembly — keeps callers out of ``_call``.
 
@@ -122,11 +140,38 @@ async def generate_digest_text(summaries: list[dict], model: str | None = None) 
     """
     from app.prompts.summarization import build_digest_prompt
 
-    prompt = build_digest_prompt(summaries)
-    text = await _call(prompt, max_tokens=4096, model=model)
+    # A post with no summary contributes nothing but bulk to the prompt, and
+    # DeepSeek just parrots it back as a bare "- Channel: " bullet with no
+    # content — drop it rather than pad the digest with empty lines. If every
+    # summary is empty (shouldn't normally happen), fall back to the original
+    # list so the digest call still has something to work with.
+    usable = [s for s in summaries if (s.get("summary") or "").strip()]
+    prompt = build_digest_prompt(usable or summaries)
+
+    response = await _call_raw(prompt, max_tokens=DIGEST_MAX_TOKENS, model=model)
+    text = response.choices[0].message.content.strip()
+    truncated = response.choices[0].finish_reason == "length"
+
     if not text.strip():
-        logger.warning("DeepSeek returned an empty digest (%d posts); retrying once", len(summaries))
-        text = await _call(prompt, max_tokens=4096, model=model)
+        logger.warning("DeepSeek returned an empty digest (%d posts); retrying once", len(usable))
+        response = await _call_raw(prompt, max_tokens=DIGEST_MAX_TOKENS, model=model)
+        text = response.choices[0].message.content.strip()
+        truncated = response.choices[0].finish_reason == "length"
+
+    if truncated:
+        # The model ran out of output tokens mid-generation — the tail is
+        # reliably a broken bullet (empty, or cut off mid-word/mid-markdown,
+        # e.g. "- Channel: <"). Drop it and say so, instead of silently
+        # shipping a digest that just stops mid-sentence.
+        logger.warning(
+            "Digest generation hit the token limit (%d posts) — trimming the incomplete tail",
+            len(usable),
+        )
+        text = _trim_incomplete_tail(text)
+        text += (
+            "\n\n_…дайджест обрезан — слишком много постов за этот период. "
+            "Попробуйте сузить временное окно или темы в настройках расписания._"
+        )
     return text
 
 
