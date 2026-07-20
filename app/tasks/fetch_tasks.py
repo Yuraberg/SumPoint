@@ -207,12 +207,6 @@ async def _fetch_channel(db, ingestion: TelegramIngestion, channel: Channel) -> 
             continue
 
         enriched = await process_post(raw_post["text"], channel.title)
-        if enriched is None:
-            logger.warning(
-                "AI processing failed for message %s in channel %s; skipping",
-                raw_post["telegram_message_id"], channel.title,
-            )
-            continue
 
         pub_at = raw_post["published_at"]
         if pub_at.tzinfo is not None:

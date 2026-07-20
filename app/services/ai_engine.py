@@ -226,26 +226,37 @@ async def generate_embedding(text: str) -> list[float]:
         return [0.0] * EMBEDDING_DIM
 
 
-async def process_post(text: str, channel_title: str) -> dict[str, Any] | None:
-    """Full AI pipeline for one post. Returns enriched fields, or None if
-    DeepSeek is unavailable — callers should skip the post and continue
-    with the rest of the batch rather than aborting the whole fetch.
+async def process_post(text: str, channel_title: str) -> dict[str, Any]:
+    """Full AI pipeline for one post. classify/summarise/extract/embed don't
+    depend on each other's output, so they run concurrently instead of as
+    four sequential round-trips.
 
-    classify/summarise/extract/embed don't depend on each other's output, so
-    they run concurrently instead of as four sequential round-trips."""
-    try:
-        category, summary, events, embedding = await asyncio.gather(
-            classify_post(text),
-            summarise_post(text, channel_title),
-            extract_events(text),
-            generate_embedding(text),
-        )
-        return {
-            "category": category,
-            "summary": summary,
-            "events": events,
-            "embedding": embedding,
-        }
-    except Exception:
-        logger.exception("process_post failed; skipping this post")
-        return None
+    Each call is independent: one failing (e.g. a single DeepSeek timeout)
+    no longer loses the whole post — that call falls back to a safe default
+    and the post is still stored with whatever succeeded, instead of being
+    silently dropped from the feed and digest."""
+    category, summary, events, embedding = await asyncio.gather(
+        classify_post(text),
+        summarise_post(text, channel_title),
+        extract_events(text),
+        generate_embedding(text),
+        return_exceptions=True,
+    )
+    if isinstance(category, Exception):
+        logger.warning("classify_post failed: %s — using fallback category", category)
+        category = "Прочее"
+    if isinstance(summary, Exception):
+        logger.warning("summarise_post failed: %s — using truncated text as summary", summary)
+        summary = text[:280].strip()
+    if isinstance(events, Exception):
+        logger.warning("extract_events failed: %s — no events for this post", events)
+        events = []
+    if isinstance(embedding, Exception):
+        logger.warning("generate_embedding failed: %s — using zero-vector fallback", embedding)
+        embedding = [0.0] * EMBEDDING_DIM
+    return {
+        "category": category,
+        "summary": summary,
+        "events": events,
+        "embedding": embedding,
+    }
