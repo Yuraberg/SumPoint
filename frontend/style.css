@@ -738,7 +738,7 @@ body {
 
 .last-run { font-size: 12px; color: var(--muted); }
 
-.row-del-btn {
+.row-del-btn, .row-edit-btn {
   background: none;
   border: none;
   color: var(--muted);
@@ -748,6 +748,7 @@ body {
   transition: color .12s;
 }
 .row-del-btn:hover { color: #ef4444; }
+.row-edit-btn:hover { color: var(--accent); }
 
 /* ── Modal ───────────────────────────────────────────────────────────────────── */
 .modal-backdrop {

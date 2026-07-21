@@ -184,11 +184,13 @@ const I18N = {
     "schedule.nameRequired": "Enter a name",
     "schedule.cronRequired": "Set a schedule",
     "schedule.createError": "Creation error: ",
+    "schedule.edit": "Edit",
     "schedType.topics": "Topics",
     "schedType.events": "Events",
     "schedType.collect": "Collect",
 
     "modal.schedule.title": "New schedule",
+    "modal.schedule.editTitle": "Edit schedule",
     "form.name": "Name",
     "form.namePlaceholder": "AI. at 9:00 every day",
     "form.type": "Type",
@@ -209,6 +211,7 @@ const I18N = {
     "form.postTopicsHint": "(empty = all)",
     "modal.cancel": "Cancel",
     "modal.create": "Create",
+    "modal.save": "Save",
 
     "channels.title": "CHANNELS",
     "channels.subtitle": "Manage your data sources",
@@ -437,11 +440,13 @@ const I18N = {
     "schedule.nameRequired": "Укажите название",
     "schedule.cronRequired": "Укажите расписание",
     "schedule.createError": "Ошибка создания: ",
+    "schedule.edit": "Редактировать",
     "schedType.topics": "Темы",
     "schedType.events": "События",
     "schedType.collect": "Сбор",
 
     "modal.schedule.title": "Новое расписание",
+    "modal.schedule.editTitle": "Редактировать расписание",
     "form.name": "Название",
     "form.namePlaceholder": "AI. в 9:00 каждый день",
     "form.type": "Тип",
@@ -462,6 +467,7 @@ const I18N = {
     "form.postTopicsHint": "(пусто = все)",
     "modal.cancel": "Отмена",
     "modal.create": "Создать",
+    "modal.save": "Сохранить",
 
     "channels.title": "КАНАЛЫ",
     "channels.subtitle": "Управление источниками данных",

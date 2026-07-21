@@ -14,6 +14,8 @@ let selectedPostIds = new Set();  // ids of checked posts, for selective export
 let lastEvents = [];
 let allLoadedEvents = [];  // events after server + topic filters, before the free-text search filter
 let selectedEventKeys = new Set();  // keys (name+date+idx) of checked events, for selective .ics export
+let lastSchedules = [];  // schedules from the last /schedule/ load, so the edit modal can prefill without a refetch
+let schedEditId = null;  // id of the schedule being edited, or null when the modal is in "create" mode
 
 // Feed pagination / infinite-scroll state. searchMode disables paging because
 // search returns a single fixed result set, not an offset-able feed.
@@ -273,10 +275,10 @@ function wireStaticHandlers() {
   _on("magic-btn", "click", requestMagicLink);
 
   // Schedule modal open/close/create
-  _on("sched-open-btn", "click", openSchedModal);
+  _on("sched-open-btn", "click", () => openSchedModal());
   _on("sched-close-btn", "click", () => closeSchedModal());
   _on("sched-cancel-btn", "click", () => closeSchedModal());
-  _on("sched-create-btn", "click", createSchedule);
+  _on("sched-create-btn", "click", saveSchedule);
   _on("sched-modal", "click", e => closeSchedModal(e));
   _on("m-cron-preset", "change", e => onPresetChange(e.target));
   const typeBtns = document.getElementById("type-btns");
@@ -318,6 +320,7 @@ function _onRowAction(e) {
     case "toggle-channel": toggleChannel(Number(id)); break;
     case "delete-schedule": deleteSchedule(Number(id)); break;
     case "toggle-schedule": toggleSchedule(Number(id), btn); break;
+    case "edit-schedule": openSchedModal(Number(id)); break;
     case "approve-user": approveUser(Number(id)); break;
     case "delete-invite": deleteInvite(Number(id)); break;
   }
@@ -1930,6 +1933,7 @@ async function loadSchedule() {
   try {
     const data = await apiFetch("/schedule/");
     loader.style.display = "none";
+    lastSchedules = data || [];
     if (!data || data.length === 0) { empty.style.display = "block"; return; }
     data.forEach(s => tbody.appendChild(renderSchedRow(s)));
   } catch (e) {
@@ -1958,6 +1962,7 @@ function renderSchedRow(s) {
     </td>
     <td class="last-run">${lastRun}</td>
     <td>
+      <button class="row-edit-btn" data-action="edit-schedule" data-id="${s.id}" title="${escHtml(t("schedule.edit"))}">✎</button>
       <button class="row-del-btn" data-action="delete-schedule" data-id="${s.id}" title="Delete">✕</button>
     </td>
   `;
@@ -1988,21 +1993,41 @@ async function deleteSchedule(id) {
 
 // Modal
 
-function openSchedModal() {
+function openSchedModal(editId = null) {
+  const sched = editId != null ? lastSchedules.find(s => s.id === editId) : null;
+  schedEditId = sched ? sched.id : null;
+
   document.getElementById("sched-modal").style.display = "flex";
-  document.getElementById("m-name").value = "";
-  document.getElementById("m-cron-preset").value = "0 9 * * *";
-  document.getElementById("m-cron-custom").style.display = "none";
-  document.querySelectorAll(".type-btn").forEach(b => b.classList.remove("active"));
-  document.querySelector(".type-btn[data-type='topics']").classList.add("active");
-  document.getElementById("m-topics-section").style.display = "flex";
-  document.querySelectorAll("#m-categories input").forEach(cb => { cb.checked = false; });
-  document.querySelector("input[name='m-hours'][value='24']").checked = true;
+  document.getElementById("modal-sched-title").textContent = t(sched ? "modal.schedule.editTitle" : "modal.schedule.title");
+  document.getElementById("sched-create-btn").textContent = t(sched ? "modal.save" : "modal.create");
+
+  document.getElementById("m-name").value = sched ? sched.name : "";
+
+  const cronPresetSel = document.getElementById("m-cron-preset");
+  const cronExpr = sched ? sched.cron_expr : "0 9 * * *";
+  const isKnownPreset = Array.from(cronPresetSel.options).some(o => o.value === cronExpr);
+  cronPresetSel.value = isKnownPreset ? cronExpr : "custom";
+  document.getElementById("m-cron-custom").style.display = isKnownPreset ? "none" : "block";
+  document.getElementById("m-cron-custom").value = isKnownPreset ? "" : cronExpr;
+
+  const type = sched ? sched.schedule_type : "topics";
+  document.querySelectorAll(".type-btn").forEach(b => b.classList.toggle("active", b.dataset.type === type));
+  document.getElementById("m-topics-section").style.display = type === "topics" ? "flex" : "none";
+
+  const hours = sched ? String(sched.hours_back) : "24";
+  const hoursRadio = document.querySelector(`input[name='m-hours'][value='${hours}']`);
+  (hoursRadio || document.querySelector("input[name='m-hours'][value='24']")).checked = true;
+
+  if (sched && sched.model) document.getElementById("m-model").value = sched.model;
+
+  const activeCats = new Set(sched && sched.categories ? sched.categories : []);
+  document.querySelectorAll("#m-categories input").forEach(cb => { cb.checked = activeCats.has(cb.value); });
 }
 
 function closeSchedModal(e) {
   if (!e || e.target === document.getElementById("sched-modal")) {
     document.getElementById("sched-modal").style.display = "none";
+    schedEditId = null;
   }
 }
 
@@ -2018,7 +2043,7 @@ function onPresetChange(sel) {
   custom.style.display = sel.value === "custom" ? "block" : "none";
 }
 
-async function createSchedule() {
+async function saveSchedule() {
   const name = document.getElementById("m-name").value.trim();
   if (!name) { toast(t("schedule.nameRequired"), "error"); return; }
 
@@ -2035,14 +2060,17 @@ async function createSchedule() {
   const model = document.getElementById("m-model").value;
   const checkedCats = Array.from(document.querySelectorAll("#m-categories input:checked")).map(cb => cb.value);
 
+  const body = JSON.stringify({
+    name, schedule_type, cron_expr, hours_back, model,
+    categories: checkedCats.length > 0 ? checkedCats : null,
+  });
+
   try {
-    await apiFetch("/schedule/", {
-      method: "POST",
-      body: JSON.stringify({
-        name, schedule_type, cron_expr, hours_back, model,
-        categories: checkedCats.length > 0 ? checkedCats : null,
-      }),
-    });
+    if (schedEditId != null) {
+      await apiFetch(`/schedule/${schedEditId}`, { method: "PUT", body });
+    } else {
+      await apiFetch("/schedule/", { method: "POST", body });
+    }
     closeSchedModal();
     loadSchedule();
   } catch (e) {
