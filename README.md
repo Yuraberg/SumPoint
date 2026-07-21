@@ -44,6 +44,7 @@ calendar. The UI defaults to English, with a one-click switch to Russian.
 | **AI Classification** | Every post is tagged into a category (Рынок, Технологии, События…) by DeepSeek |
 | **Smart Summarisation** | 1–3 sentence summaries that preserve key facts and numbers |
 | **Event Extraction** | Dates, times, event names and links pulled out into a calendar view, with a text search over the extracted events and selective `.ics` export |
+| **Favorites** | Bookmark posts and calendar events with one tap, browsed in a dedicated tab grouped by topic — from the web dashboard or the bot |
 | **Semantic Search** | Find posts by meaning, not just keywords, via BGE-M3 embeddings + pgvector cosine search |
 | **RAG Assistant** | Chat with your own feed — retrieves the most relevant posts and asks DeepSeek to answer with `[N]` citations back to the source |
 | **Duplicate Clustering** | Reposts of the same story across channels are grouped ("также в N каналах") via pgvector nearest-neighbour search |
