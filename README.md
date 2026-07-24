@@ -8,11 +8,19 @@
   <img alt="License" src="https://img.shields.io/badge/license-Proprietary-red">
 </p>
 
-SumPoint connects to your Telegram channel subscriptions, filters out ads and duplicate reposts, and turns the noise into a structured feed: category labels, 1–3 sentence summaries, an upcoming-events calendar, keyword alerts, and scheduled digests — delivered via a web dashboard and a Telegram bot.
+<p align="center">
+  <a href="#english">🇬🇧 English</a> · <a href="#russian">🇷🇺 Русский</a>
+</p>
 
 ---
 
-## Contents
+<a name="english"></a>
+
+## 🇬🇧 English
+
+SumPoint connects to your Telegram channel subscriptions, filters out ads and duplicate reposts, and turns the noise into a structured feed: category labels, 1–3 sentence summaries, an upcoming-events calendar, keyword alerts, and scheduled digests — delivered via a web dashboard and a Telegram bot.
+
+### Contents
 
 - [Screenshots](#-screenshots)
 - [Features](#-features)
@@ -24,9 +32,7 @@ SumPoint connects to your Telegram channel subscriptions, filters out ads and du
 - [Prompt Engineering](#-prompt-engineering)
 - [License](#-license)
 
----
-
-## 📷 Screenshots
+### 📷 Screenshots
 
 | Post feed | Events | Statistics |
 |---|---|---|
@@ -39,7 +45,7 @@ calendar. The UI defaults to English, with a one-click switch to Russian.
 
 ---
 
-## ✨ Features
+### ✨ Features
 
 | Feature | Description |
 |---|---|
@@ -61,7 +67,7 @@ calendar. The UI defaults to English, with a one-click switch to Russian.
 
 ---
 
-## 🏗 Architecture
+### 🏗 Architecture
 
 <p align="center">
   <img src="assets/readme/pipeline.svg" alt="SumPoint post processing pipeline: Telegram channels through Telethon, pre-filtering, four concurrent DeepSeek/Ollama calls in the Celery worker, PostgreSQL + pgvector storage, then FastAPI, the Telegram bot and the frontend SPA as consumers" width="100%">
@@ -78,9 +84,9 @@ Telethon directly.
 
 ---
 
-## 🚀 Quick Start
+### 🚀 Quick Start
 
-### 1. Clone & configure
+#### 1. Clone & configure
 
 ```bash
 git clone https://github.com/Yuraberg/SumPoint.git
@@ -89,7 +95,7 @@ cp .env.example .env
 # Fill in .env with your keys (see below)
 ```
 
-### 2. Required credentials
+#### 2. Required credentials
 
 | Variable | Where to get it |
 |---|---|
@@ -103,7 +109,7 @@ cp .env.example .env
 
 See `.env.example` for the full list, including optional ones (`SENTRY_DSN`, `UPTIME_KUMA_PUSH_URL`, digest schedule hours, fetch pacing).
 
-### 3. Run with Docker Compose
+#### 3. Run with Docker Compose
 
 ```bash
 docker compose up -d
@@ -119,7 +125,7 @@ For production, layer the hardened overrides (no source mounts, resource limits,
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-### 4. Run locally (development, without Docker)
+#### 4. Run locally (development, without Docker)
 
 ```bash
 python -m venv .venv
@@ -137,7 +143,7 @@ python -m bot.bot                                             # separate termina
 
 ---
 
-## 📁 Project Structure
+### 📁 Project Structure
 
 ```
 SumPoint/
@@ -162,7 +168,7 @@ SumPoint/
 
 ---
 
-## 🔐 Security
+### 🔐 Security
 
 - Telegram session strings encrypted at rest with **AES-256-GCM**
 - Auth via **Telegram Login Widget** (HMAC-verified, timing-safe compare) or bot-issued magic links, both exchanged for a **JWT** delivered as an HttpOnly, `SameSite=Lax`, `Secure` cookie — never touched by frontend JS, so XSS can't exfiltrate it
@@ -172,7 +178,7 @@ SumPoint/
 - Dependencies scanned with `pip-audit` on every CI run
 - Optional **Sentry** integration for error tracking (no-op unless `SENTRY_DSN` is set)
 
-## 📊 Monitoring & Ops
+### 📊 Monitoring & Ops
 
 - `GET /api/v1/health` — deep health check (DB `SELECT 1` + Redis `PING`), meant for Uptime Kuma
 - `GET /api/v1/health/fetch` — fetch-pipeline freshness check, catches a wedged worker/beat even when the API and worker heartbeat both still look green
@@ -183,7 +189,7 @@ SumPoint/
 
 ---
 
-## 🤖 Prompt Engineering
+### 🤖 Prompt Engineering
 
 All DeepSeek prompts (`app/prompts/`) follow a consistent structure:
 
@@ -194,10 +200,208 @@ All DeepSeek prompts (`app/prompts/`) follow a consistent structure:
 
 ---
 
-## 📄 License
+### 📄 License
 
 **© 2026 Yuraberg. All rights reserved.**
 
 This software is proprietary. No use, copying, modification, or distribution
 is permitted without prior written authorization from the copyright holder —
 see [LICENSE](LICENSE) for the full terms.
+
+---
+
+<a name="russian"></a>
+
+## 🇷🇺 Русский
+
+SumPoint подключается к вашим подпискам на Telegram-каналы, отфильтровывает рекламу и повторяющиеся репосты, и превращает шум в структурированную ленту: метки категорий, краткие содержания в 1–3 предложения, календарь предстоящих событий, оповещения по ключевым словам и дайджесты по расписанию — доступные через веб-дашборд и Telegram-бота.
+
+### Содержание
+
+- [Скриншоты](#-скриншоты)
+- [Возможности](#-возможности)
+- [Архитектура](#-архитектура)
+- [Быстрый старт](#-быстрый-старт)
+- [Структура проекта](#-структура-проекта)
+- [Безопасность](#-безопасность)
+- [Мониторинг и эксплуатация](#-мониторинг-и-эксплуатация)
+- [Промпт-инжиниринг](#-промпт-инжиниринг)
+- [Лицензия](#-лицензия)
+
+### 📷 Скриншоты
+
+| Лента постов | События | Статистика |
+|---|---|---|
+| ![Posts](docs/screenshots/posts.png) | ![Events](docs/screenshots/events.png) | ![Statistics](docs/screenshots/stats.png) |
+
+Лента поддерживает фильтры по дате/каналу/теме, три уровня плотности отображения,
+полнотекстовый и семантический поиск, отметку прочитанного и чекбоксы для
+экспорта в CSV/JSON. Вкладка «События» умеет искать по названию/месту/спикеру
+и экспортировать выбранные события в `.ics` для вашего календаря. По умолчанию
+интерфейс на английском, переключение на русский — в один клик.
+
+---
+
+### ✨ Возможности
+
+| Функция | Описание |
+|---|---|
+| **AI-классификация** | Каждый пост размечается по категории (Рынок, Технологии, События…) с помощью DeepSeek |
+| **Умное реферирование** | Краткое содержание в 1–3 предложения с сохранением ключевых фактов и цифр |
+| **Извлечение событий** | Даты, время, названия событий и ссылки попадают в календарь, с текстовым поиском по извлечённым событиям и выборочным экспортом в `.ics` |
+| **Избранное** | Сохраняйте посты и события в один тап, просматривайте их на отдельной вкладке с группировкой по темам — из веб-дашборда или из бота |
+| **Семантический поиск** | Поиск постов по смыслу, а не только по ключевым словам, через эмбеддинги BGE-M3 и косинусный поиск pgvector |
+| **RAG-ассистент** | Общайтесь со своей лентой — ассистент находит наиболее релевантные посты и просит DeepSeek ответить со ссылками `[N]` на источник |
+| **Кластеризация дублей** | Репосты одной и той же новости из разных каналов группируются («также в N каналах») через поиск ближайших соседей pgvector |
+| **Оповещения по ключевым словам** | Уведомление сразу, как только в канале появляется пост с отслеживаемым словом |
+| **Настраиваемые расписания** | Дайджесты по cron-расписанию для отдельных тем, а не только два стандартных ежедневных слота |
+| **Дашборд аналитики** | Объём постов во времени, разбивка по категориям и топ-каналам, счётчики непрочитанного и событий |
+| **Выборочный экспорт** | Отметьте нужные строки в таблицах постов/событий и экспортируйте только их — CSV/JSON для постов, `.ics` для событий |
+| **Telegram-бот** | Утренняя/вечерняя доставка дайджеста, фильтры по категориям, управление каналами в один тап |
+| **Веб-дашборд** | SPA в тёмной теме: лента постов, вид дайджеста, календарь событий, аналитика, RAG-чат, менеджер каналов |
+| **Фильтрация рекламы и дублей** | Эвристики по ключевым словам для рекламы + дедупликация по хэшу контента среди репостов |
+| **Контроль доступа** | Доступ по инвайт-коду / одобрению владельца при регистрации — новые пользователи попадают в состояние ожидания до одобрения |
+
+---
+
+### 🏗 Архитектура
+
+<p align="center">
+  <img src="assets/readme/pipeline.svg" alt="SumPoint post processing pipeline: Telegram channels through Telethon, pre-filtering, four concurrent DeepSeek/Ollama calls in the Celery worker, PostgreSQL + pgvector storage, then FastAPI, the Telegram bot and the frontend SPA as consumers" width="100%">
+</p>
+
+Redis выступает и брокером/хранилищем результатов Celery, и распределённой
+блокировкой, которая сдерживает темп непрерывного цикла загрузки постов, чтобы
+он никогда не проходил все каналы разом (риск флуд-бана) и никогда не запускал
+два пересекающихся цикла загрузки одновременно.
+
+**Почему Telethon работает только в воркере:** User API Телеграма банит сессию,
+если она используется с двух IP одновременно, поэтому все вызовы Telethon
+отправляются из API-контейнера в воркер через Celery — процесс API никогда не
+обращается к Telethon напрямую.
+
+---
+
+### 🚀 Быстрый старт
+
+#### 1. Клонирование и настройка
+
+```bash
+git clone https://github.com/Yuraberg/SumPoint.git
+cd SumPoint
+cp .env.example .env
+# Заполните .env своими ключами (см. ниже)
+```
+
+#### 2. Необходимые учётные данные
+
+| Переменная | Где получить |
+|---|---|
+| `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` | [my.telegram.org](https://my.telegram.org) → API development tools |
+| `TELEGRAM_SESSION_STRING` | Один раз локально выполнить `python generate_session.py` |
+| `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) → `/newbot` (тот же бот, что используется для Login Widget) |
+| `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com) |
+| `OLLAMA_BASE_URL` | URL инстанса Ollama с моделью `bge-m3` (для эмбеддингов) |
+| `SESSION_ENCRYPTION_KEY` | `openssl rand -hex 32` |
+| `SECRET_KEY` | `openssl rand -hex 32` |
+
+Полный список, включая опциональные переменные (`SENTRY_DSN`, `UPTIME_KUMA_PUSH_URL`, часы расписания дайджестов, темп загрузки), см. в `.env.example`.
+
+#### 3. Запуск через Docker Compose
+
+```bash
+docker compose up -d
+```
+
+- Веб-дашборд + API: `http://localhost:8001`
+- Документация API: `http://localhost:8001/docs`
+- Health-check: `http://localhost:8001/api/v1/health`
+
+Для продакшена добавьте усиленные оверрайды (без монтирования исходников, с лимитами ресурсов, без публикации портов БД/Redis наружу):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+#### 4. Локальный запуск (разработка, без Docker)
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+docker compose up -d db redis    # только инфраструктура
+alembic upgrade head
+
+uvicorn app.main:app --reload                                # API
+celery -A app.tasks.celery_app worker --loglevel=info         # отдельный терминал
+celery -A app.tasks.celery_app beat --loglevel=info           # отдельный терминал
+python -m bot.bot                                             # отдельный терминал
+```
+
+---
+
+### 📁 Структура проекта
+
+```
+SumPoint/
+├── app/
+│   ├── api/            # роутеры FastAPI (auth, admin, channels, posts, digest, chat, stats, schedule, health)
+│   ├── models/          # модели SQLAlchemy (User, Channel, Post, Schedule, KeywordAlert, MagicLink, InviteCode)
+│   ├── repositories/     # слой запросов, по модулю на агрегат
+│   ├── schemas/           # Pydantic-модели запросов/ответов
+│   ├── prompts/            # шаблоны промптов DeepSeek (классификация, реферирование, события)
+│   ├── services/            # AI-движок, загрузка из Telegram, кластеризация, шифрование, сборка дайджеста, RAG
+│   └── tasks/                # задачи Celery (загрузка, расписание дайджестов, обслуживание)
+├── bot/                # Telegram-бот (python-telegram-bot)
+│   └── handlers/       # /start, дайджест, настройки, поиск, оповещения, доступ, последние посты
+├── frontend/           # одностраничный веб-дашборд (vanilla JS, без сборки)
+├── alembic/            # миграции базы данных (схема управляется только Alembic, не приложением)
+├── scripts/            # backup-db.sh / restore-db.sh
+├── tests/              # модульные + интеграционные (реальный Postgres/pgvector) наборы тестов
+├── docker-compose.yml         # разработка
+├── docker-compose.prod.yml    # оверрайды для продакшена
+└── .env.example
+```
+
+---
+
+### 🔐 Безопасность
+
+- Строки сессий Telegram шифруются при хранении алгоритмом **AES-256-GCM**
+- Аутентификация через **Telegram Login Widget** (HMAC-проверка, сравнение с защитой от тайминг-атак) или magic-ссылки от бота — оба способа обмениваются на **JWT**, который доставляется в HttpOnly-куке с `SameSite=Lax` и `Secure` — фронтенд-JS его никогда не видит, поэтому XSS не может его похитить
+- **Контроль доступа**: новые регистрации попадают в состояние ожидания, пока владелец не одобрит их или не будет использован одноразовый инвайт-код; каждый бизнес-эндпоинт проверяет `is_approved`
+- **Rate limiting** на уровне эндпоинтов (`slowapi`) на базе Redis, привязан к реальному IP клиента за обратным прокси Caddy (последний хоп `X-Forwarded-For`, а не первый — первый можно подделать)
+- Заголовки безопасности в каждом ответе: CSP (без `unsafe-inline`), `X-Frame-Options`, HSTS, `Referrer-Policy`, `Permissions-Policy`
+- Зависимости сканируются `pip-audit` при каждом запуске CI
+- Опциональная интеграция с **Sentry** для отслеживания ошибок (ничего не делает, пока не задан `SENTRY_DSN`)
+
+### 📊 Мониторинг и эксплуатация
+
+- `GET /api/v1/health` — глубокая проверка состояния (БД `SELECT 1` + Redis `PING`), предназначена для Uptime Kuma
+- `GET /api/v1/health/fetch` — проверка свежести пайплайна загрузки, ловит зависший worker/beat, даже когда health-check API и heartbeat воркера всё ещё выглядят «зелёными»
+- Heartbeat воркера Celery отправляется в Uptime Kuma каждые 5 минут, если задан `UPTIME_KUMA_PUSH_URL`
+- Каждому запросу присваивается `request_id`, который отражается в заголовке ответа `X-Request-ID` и попадает в JSON-логи — так репорт о баге можно проследить до конкретных строк лога
+- `scripts/backup-db.sh` / `scripts/restore-db.sh` — резервное копирование и восстановление на базе pg_dump; деплой-пайплайн держит на хосте установленный ночной cron для бэкапов
+- CI (`.github/workflows/deploy.yml`) на каждый PR запускает линт + `pip-audit` + юнит-тесты, прогоняет интеграционные тесты против реального сервис-контейнера Postgres/pgvector и деплоит по SSH при мёрдже в `main` — с автоматическим откатом на предыдущий коммит, если health-check после деплоя не проходит
+
+---
+
+### 🤖 Промпт-инжиниринг
+
+Все промпты DeepSeek (`app/prompts/`) следуют единой структуре:
+
+- **Role Prompting** — заданная роль под каждую задачу (классификатор, составитель резюме, экстрактор событий)
+- **Разделители** — `###` и `"""` отделяют инструкции от текста поста
+- **Chain-of-Thought** — блок `<thought>` для предварительного рассуждения, вырезается перед сохранением или показом результата
+- **Few-Shot** — размеченные примеры в промпте классификации
+
+---
+
+### 📄 Лицензия
+
+**© 2026 Yuraberg. Все права защищены.**
+
+Данное программное обеспечение является проприетарным. Любое использование,
+копирование, модификация или распространение без предварительного письменного
+разрешения правообладателя запрещены — полные условия см. в [LICENSE](LICENSE).
