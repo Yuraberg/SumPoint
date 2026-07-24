@@ -1,0 +1,81 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SumPoint post processing pipeline">
+  <title>Post processing pipeline</title>
+
+  <style>
+    .node { fill:#2a2521; stroke:#453b34; }
+    .node-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size:17; fill:#f7f5f1; }
+    .node-sub { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12.5; fill:#8a7f73; }
+    .lane-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13; letter-spacing:2; fill:#d97757; }
+    .edge { stroke:#5a4f45; stroke-width:1.4; fill:none; }
+  </style>
+
+  <rect x="0.5" y="0.5" width="1199" height="519" rx="14" fill="#211d1a" stroke="#3a322c"/>
+
+  <!-- Row 1: source -->
+  <rect class="node" x="450" y="28" width="300" height="52" rx="10"/>
+  <text class="node-title" x="600" y="52" text-anchor="middle">Telegram Channels</text>
+  <text class="node-sub" x="600" y="70" text-anchor="middle">Telethon &#183; User API &#183; worker-only</text>
+
+  <path class="edge" d="M600 80 L600 108"/>
+
+  <!-- Row 2: pre-filter -->
+  <rect class="node" x="450" y="108" width="300" height="48" rx="10"/>
+  <text class="node-title" x="600" y="130" text-anchor="middle">Pre-filter</text>
+  <text class="node-sub" x="600" y="147" text-anchor="middle">ad heuristics + in-run content-hash dedup</text>
+
+  <path class="edge" d="M600 156 L600 184"/>
+
+  <!-- Row 3: celery worker label -->
+  <rect x="380" y="184" width="440" height="34" rx="8" fill="none" stroke="#d97757" stroke-opacity="0.5"/>
+  <text class="lane-label" x="600" y="206" text-anchor="middle">CELERY WORKER &#183; ASYNCIO.GATHER</text>
+
+  <path class="edge" d="M480 218 L480 236 M560 218 L560 236 M640 218 L640 236 M720 218 L720 236"/>
+
+  <!-- Row 4: four concurrent AI calls -->
+  <rect class="node" x="70" y="236" width="200" height="60" rx="10"/>
+  <text class="node-title" x="170" y="260" text-anchor="middle">Classify</text>
+  <text class="node-sub" x="170" y="278" text-anchor="middle">DeepSeek</text>
+
+  <rect class="node" x="290" y="236" width="200" height="60" rx="10"/>
+  <text class="node-title" x="390" y="260" text-anchor="middle">Summarise</text>
+  <text class="node-sub" x="390" y="278" text-anchor="middle">DeepSeek</text>
+
+  <rect class="node" x="510" y="236" width="200" height="60" rx="10"/>
+  <text class="node-title" x="610" y="260" text-anchor="middle">Extract Events</text>
+  <text class="node-sub" x="610" y="278" text-anchor="middle">DeepSeek</text>
+
+  <rect class="node" x="730" y="236" width="200" height="60" rx="10"/>
+  <text class="node-title" x="830" y="260" text-anchor="middle">Embed</text>
+  <text class="node-sub" x="830" y="278" text-anchor="middle">Ollama &#183; BGE-M3</text>
+
+  <text class="node-sub" x="1080" y="266" text-anchor="middle">each call fails</text>
+  <text class="node-sub" x="1080" y="282" text-anchor="middle">independently</text>
+
+  <path class="edge" d="M170 296 L170 316 L600 316 M390 296 L390 316 M610 296 L610 316 M830 296 L830 316 L600 316"/>
+  <path class="edge" d="M600 316 L600 344"/>
+
+  <!-- Row 5: storage -->
+  <rect class="node" x="400" y="344" width="400" height="52" rx="10"/>
+  <text class="node-title" x="600" y="368" text-anchor="middle">PostgreSQL + pgvector</text>
+  <text class="node-sub" x="600" y="386" text-anchor="middle">posts &#183; category &#183; summary &#183; events &#183; embedding</text>
+
+  <text class="node-sub" x="1000" y="358" text-anchor="middle">duplicate</text>
+  <text class="node-sub" x="1000" y="373" text-anchor="middle">clustering</text>
+  <path class="edge" d="M800 370 L940 370" stroke-dasharray="3 4"/>
+
+  <path class="edge" d="M480 396 L480 420 L220 420 M600 396 L600 420 M720 396 L720 420 L980 420"/>
+  <path class="edge" d="M220 420 L220 440 M600 420 L600 440 M980 420 L980 440"/>
+
+  <!-- Row 6: consumers -->
+  <rect class="node" x="120" y="440" width="200" height="56" rx="10"/>
+  <text class="node-title" x="220" y="464" text-anchor="middle">FastAPI</text>
+  <text class="node-sub" x="220" y="482" text-anchor="middle">JWT auth + rate limit</text>
+
+  <rect class="node" x="500" y="440" width="200" height="56" rx="10"/>
+  <text class="node-title" x="600" y="464" text-anchor="middle">Telegram Bot</text>
+  <text class="node-sub" x="600" y="482" text-anchor="middle">python-telegram-bot</text>
+
+  <rect class="node" x="880" y="440" width="200" height="56" rx="10"/>
+  <text class="node-title" x="980" y="464" text-anchor="middle">Frontend SPA</text>
+  <text class="node-sub" x="980" y="482" text-anchor="middle">vanilla JS</text>
+</svg>

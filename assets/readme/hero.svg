@@ -1,0 +1,86 @@
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SumPoint — self-hosted Telegram intelligence pipeline">
+  <title>SumPoint</title>
+
+  <defs>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1010 150) rotate(90) scale(210 340)">
+      <stop offset="0%" stop-color="#d97757" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#d97757" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="320" fill="#211d1a"/>
+  <rect width="1200" height="320" fill="url(#glow)"/>
+  <rect x="0.5" y="0.5" width="1199" height="319" rx="11.5" fill="none" stroke="#3a322c"/>
+
+  <!-- left: wordmark + copy -->
+  <g id="title-block">
+    <text x="64" y="76" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" letter-spacing="3" fill="#d97757">SELF-HOSTED &#183; TELEGRAM INTELLIGENCE</text>
+
+    <text x="62" y="158" font-family="Georgia, 'Times New Roman', serif" font-size="78" fill="#f7f5f1">SumPoint</text>
+
+    <text x="64" y="196" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="19" fill="#b7ada0">AI-powered digest, classification, semantic search and</text>
+    <text x="64" y="222" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="19" fill="#b7ada0">event extraction — web dashboard, RAG chat, Telegram bot.</text>
+
+    <!-- stack chips -->
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#b7ada0">
+      <rect x="64" y="248" width="98" height="28" rx="14" fill="none" stroke="#4a4038" stroke-opacity="0.9"/>
+      <text x="80" y="266">Python 3.11</text>
+
+      <rect x="172" y="248" width="126" height="28" rx="14" fill="none" stroke="#4a4038" stroke-opacity="0.9"/>
+      <text x="188" y="266">FastAPI + Celery</text>
+
+      <rect x="308" y="248" width="168" height="28" rx="14" fill="none" stroke="#4a4038" stroke-opacity="0.9"/>
+      <text x="324" y="266">PostgreSQL + pgvector</text>
+
+      <rect x="486" y="248" width="98" height="28" rx="14" fill="none" stroke="#d97757" stroke-opacity="0.55"/>
+      <text x="502" y="266" fill="#e0a48d">DeepSeek</text>
+    </g>
+  </g>
+
+  <!-- right: pipeline proof (channels -> structured feed) -->
+  <g id="project-proof">
+    <text x="792" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" letter-spacing="2" fill="#8a7f73">STRUCTURED FEED</text>
+    <text x="1042" y="78" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" letter-spacing="2" fill="#8a7f73">CHANNELS</text>
+
+    <!-- connecting lines: 4 channels converge into the feed -->
+    <g stroke="#d97757" stroke-opacity="0.35" stroke-width="1.2">
+      <path d="M1122 100 L1006 152"/>
+      <path d="M1122 140 L1006 152"/>
+      <path d="M1122 180 L1006 152"/>
+      <path d="M1122 220 L1006 152"/>
+      <path d="M1006 152 L982 119"/>
+      <path d="M1006 152 L982 173"/>
+      <path d="M1006 152 L982 227"/>
+    </g>
+
+    <!-- channel nodes -->
+    <g fill="#211d1a" stroke="#d97757" stroke-width="1.4">
+      <circle cx="1122" cy="100" r="6"/>
+      <circle cx="1122" cy="140" r="6"/>
+      <circle cx="1122" cy="180" r="6"/>
+      <circle cx="1122" cy="220" r="6"/>
+    </g>
+
+    <!-- three processed-post cards -->
+    <g>
+      <rect x="762" y="96" width="220" height="46" rx="8" fill="#2a2521" stroke="#453b34"/>
+      <circle cx="780" cy="119" r="4" fill="#d97757"/>
+      <rect x="794" y="112" width="120" height="5" rx="2.5" fill="#5a4f45"/>
+      <rect x="794" y="123" width="86" height="5" rx="2.5" fill="#443a33"/>
+      <rect x="928" y="110" width="42" height="18" rx="9" fill="none" stroke="#d97757" stroke-opacity="0.5"/>
+
+      <rect x="762" y="150" width="220" height="46" rx="8" fill="#2a2521" stroke="#453b34"/>
+      <circle cx="780" cy="173" r="4" fill="#7f9f8a"/>
+      <rect x="794" y="166" width="104" height="5" rx="2.5" fill="#5a4f45"/>
+      <rect x="794" y="177" width="132" height="5" rx="2.5" fill="#443a33"/>
+      <rect x="928" y="164" width="42" height="18" rx="9" fill="none" stroke="#7f9f8a" stroke-opacity="0.6"/>
+
+      <rect x="762" y="204" width="220" height="46" rx="8" fill="#2a2521" stroke="#453b34"/>
+      <circle cx="780" cy="227" r="4" fill="#8aa0c9"/>
+      <rect x="794" y="220" width="92" height="5" rx="2.5" fill="#5a4f45"/>
+      <rect x="794" y="231" width="112" height="5" rx="2.5" fill="#443a33"/>
+      <rect x="928" y="218" width="42" height="18" rx="9" fill="none" stroke="#8aa0c9" stroke-opacity="0.6"/>
+    </g>
+  </g>
+</svg>
