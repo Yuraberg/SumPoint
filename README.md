@@ -1,12 +1,14 @@
-# 📡 SumPoint
+<div align="center">
+  <img src="assets/readme/hero.svg" alt="SumPoint — self-hosted Telegram intelligence pipeline" width="100%">
+</div>
 
-**Intelligent Telegram content processing** — AI-powered digest, classification, semantic search and event extraction, with a web dashboard, a RAG assistant and a Telegram bot.
+<p align="center">
+  <a href="https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml"><img alt="CI" src="https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml/badge.svg"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11-blue">
+  <img alt="License" src="https://img.shields.io/badge/license-Proprietary-red">
+</p>
 
 SumPoint connects to your Telegram channel subscriptions, filters out ads and duplicate reposts, and turns the noise into a structured feed: category labels, 1–3 sentence summaries, an upcoming-events calendar, keyword alerts, and scheduled digests — delivered via a web dashboard and a Telegram bot.
-
-[![CI](https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml/badge.svg)](https://github.com/Yuraberg/SumPoint/actions/workflows/deploy.yml)
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![License](https://img.shields.io/badge/license-Proprietary-red)
 
 ---
 
@@ -61,27 +63,9 @@ calendar. The UI defaults to English, with a one-click switch to Russian.
 
 ## 🏗 Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Telegram Channels  ──▶  Telethon (User API, worker-only)        │
-│                                │                                  │
-│                       Pre-filter (ads, dupes)                    │
-│                                │                                  │
-│                         Celery Worker                             │
-│                                │                                  │
-│              ┌─────────────────┼─────────────────┐               │
-│         Classify           Summarise         Extract Events      │
-│         (DeepSeek)          (DeepSeek)         (DeepSeek)         │
-│                                │                                  │
-│                      Embed (Ollama · BGE-M3)                      │
-│                                │                                  │
-│                     PostgreSQL + pgvector                         │
-│                                │                                  │
-│              ┌─────────────────┼─────────────────┐               │
-│           FastAPI          Telegram Bot         Frontend SPA      │
-│        (JWT + rate limit)  (python-telegram-bot)  (vanilla JS)   │
-└──────────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="assets/readme/pipeline.svg" alt="SumPoint post processing pipeline: Telegram channels through Telethon, pre-filtering, four concurrent DeepSeek/Ollama calls in the Celery worker, PostgreSQL + pgvector storage, then FastAPI, the Telegram bot and the frontend SPA as consumers" width="100%">
+</p>
 
 Redis backs both the Celery broker/result store and a distributed lock that
 paces the continuous fetch loop so it never bursts through every channel at
