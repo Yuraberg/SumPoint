@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 
 from app.database import AsyncSessionLocal
 from app.repositories import favorite_repository, post_repository
+from app.utils.telegram_safe import safe_reply
 from app.utils.text import truncate
 from bot.handlers.favorites import favorite_toggle_row
 
@@ -29,7 +30,7 @@ async def recent_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if not rows:
         msg = "Нет постов." if not category else f"Нет постов в категории *{category}*."
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await safe_reply(update.message, msg)
         return
 
     title = "🆕 *Последние посты:*" if not category else f"🆕 *Последние посты* [{category}]:"
@@ -42,7 +43,7 @@ async def recent_posts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         lines.append(f"{i}. *{channel}* [{cat}]\n  {summary}\n  _{date}_\n")
 
     keyboard = favorite_toggle_row([(row.id, row.id in favorite_ids) for row in rows])
-    await update.message.reply_text(
-        truncate("\n".join(lines)), parse_mode="Markdown",
+    await safe_reply(
+        update.message, truncate("\n".join(lines)),
         reply_markup=InlineKeyboardMarkup([keyboard]) if keyboard else None,
     )

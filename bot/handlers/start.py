@@ -12,6 +12,7 @@ from telegram.ext import ContextTypes
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.repositories import invite_repository, user_repository
+from app.utils.telegram_safe import safe_send
 from bot.keyboards import (  # noqa: F401  (WELCOME re-exported)
     WELCOME,
     main_menu_keyboard,
@@ -142,8 +143,6 @@ async def _notify_owners_pending(
     ]])
     for owner_id in owner_ids:
         try:
-            await context.bot.send_message(
-                chat_id=owner_id, text=text, parse_mode="Markdown", reply_markup=keyboard,
-            )
+            await safe_send(context.bot, owner_id, text, reply_markup=keyboard)
         except Exception:
             logger.warning("Failed to notify owner %s about pending user %s", owner_id, user_id)

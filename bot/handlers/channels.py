@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 from app.database import AsyncSessionLocal
 from app.models.channel import Channel
 from app.repositories import channel_repository
+from app.utils.telegram_safe import safe_reply
 from app.utils.text import truncate
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         lines.append(line)
 
     lines.append("\nУдалить: `/removechannel <id>`")
-    await update.message.reply_text(truncate("\n".join(lines)), parse_mode="Markdown")
+    await safe_reply(update.message, truncate("\n".join(lines)))
 
 
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,7 +70,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     async with AsyncSessionLocal() as db:
         existing = await channel_repository.get_by_telegram_id(db, user_id, result["telegram_id"])
         if existing:
-            await update.message.reply_text(f"Канал *{existing.title}* уже добавлен.", parse_mode="Markdown")
+            await safe_reply(update.message, f"Канал *{existing.title}* уже добавлен.")
             return
 
         ch = Channel(
@@ -81,7 +82,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         db.add(ch)
         await db.commit()
 
-    await update.message.reply_text(f"✅ Канал *{ch.title}* добавлен.", parse_mode="Markdown")
+    await safe_reply(update.message, f"✅ Канал *{ch.title}* добавлен.")
 
 
 async def import_channels(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -135,4 +136,4 @@ async def remove_channel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await db.delete(ch)
         await db.commit()
 
-    await update.message.reply_text(f"🗑 Канал *{title}* удалён.", parse_mode="Markdown")
+    await safe_reply(update.message, f"🗑 Канал *{title}* удалён.")

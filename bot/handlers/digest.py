@@ -9,6 +9,7 @@ from app.repositories import post_repository, schedule_repository
 from app.services.calendar_service import get_upcoming_events
 from app.services.digest_delivery import format_events_message
 from app.services.digest_service import build_user_digest
+from app.utils.telegram_safe import safe_edit
 from app.utils.text import truncate
 
 
@@ -38,9 +39,9 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     buttons = [[InlineKeyboardButton(cat, callback_data=f"filter_{cat}")] for cat in CATEGORIES[:5]]
     buttons.append([InlineKeyboardButton("📅 События", callback_data="events")])
 
-    await query.edit_message_text(
+    await safe_edit(
+        query,
         text,
-        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
 
@@ -62,7 +63,7 @@ async def filter_by_category(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lines = [f"*{category}* — последние посты:\n"]
     for row in rows:
         lines.append(f"• {row.summary or (row.text or '')[:100]}…")
-    await query.edit_message_text(truncate("\n".join(lines)), parse_mode="Markdown")
+    await safe_edit(query, truncate("\n".join(lines)))
 
 
 async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -74,6 +75,4 @@ async def show_events(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     async with AsyncSessionLocal() as db:
         events = await get_upcoming_events(db, user_id)
 
-    await query.edit_message_text(
-        truncate(format_events_message(events)), parse_mode="Markdown"
-    )
+    await safe_edit(query, truncate(format_events_message(events)))

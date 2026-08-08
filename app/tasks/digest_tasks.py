@@ -24,6 +24,7 @@ from app.tasks.maintenance_tasks import (  # noqa: F401
     uptime_kuma_heartbeat,
 )
 from app.tasks.schedule_tasks import check_and_run_schedules  # noqa: F401
+from app.utils.telegram_safe import safe_send
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ async def _notify_owners_digest_failure(bot, slot: str, user_id: int, error: Exc
     )
     for owner_id in owner_ids:
         try:
-            await bot.send_message(chat_id=owner_id, text=text, parse_mode="Markdown")
+            await safe_send(bot, owner_id, text)
         except Exception:
             logger.warning("Failed to notify owner %s about digest failure", owner_id)
 
@@ -109,6 +110,6 @@ async def _notify_owners_digest_disabled(bot, user_id: int, error: Exception) ->
     )
     for owner_id in owner_ids:
         try:
-            await bot.send_message(chat_id=owner_id, text=text, parse_mode="Markdown")
+            await safe_send(bot, owner_id, text)
         except Exception:
             logger.warning("Failed to notify owner %s about digest auto-disable", owner_id)

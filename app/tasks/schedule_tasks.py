@@ -9,6 +9,7 @@ from app.services.calendar_service import get_upcoming_events
 from app.services.digest_delivery import format_events_message, send_digest_for_user
 from app.tasks.base import get_bot, run
 from app.tasks.celery_app import celery_app
+from app.utils.telegram_safe import safe_send
 from app.utils.text import truncate
 from app.utils.time import utcnow
 
@@ -64,9 +65,7 @@ async def _execute_schedule_with_bot(db, sched, bot):
     elif sched.schedule_type == "events":
         events = await get_upcoming_events(db, sched.user_id, days_ahead=7)
         text = format_events_message(events)
-        await bot.send_message(
-            chat_id=sched.user_id, text=truncate(text), parse_mode="Markdown"
-        )
+        await safe_send(bot, sched.user_id, truncate(text))
     elif sched.schedule_type == "collect":
         from app.tasks.fetch_tasks import fetch_all_channels
         fetch_all_channels.delay()

@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 from app.database import AsyncSessionLocal
 from app.repositories import favorite_repository
 from app.services.calendar_service import get_favorite_events
+from app.utils.telegram_safe import safe_edit, safe_reply
 from app.utils.text import truncate
 
 _MAX_POSTS = 10
@@ -95,7 +96,7 @@ async def _build_favorites_view(
 async def list_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/favorites — show favorited posts and events, grouped by category."""
     text, keyboard = await _build_favorites_view(update.effective_user.id)
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await safe_reply(update.message, text, reply_markup=keyboard)
 
 
 async def favorites_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -103,7 +104,7 @@ async def favorites_menu_callback(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
     text, keyboard = await _build_favorites_view(query.from_user.id, with_back_button=True)
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await safe_edit(query, text, reply_markup=keyboard)
 
 
 async def _refresh_if_favorites_view(query) -> None:
@@ -119,7 +120,7 @@ async def _refresh_if_favorites_view(query) -> None:
         for btn in row
     )
     text, keyboard = await _build_favorites_view(query.from_user.id, with_back_button=had_back_button)
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await safe_edit(query, text, reply_markup=keyboard)
 
 
 async def toggle_favorite_post_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

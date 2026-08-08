@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from app.database import AsyncSessionLocal
 from app.models.keyword_alert import KeywordAlert
 from app.repositories import alert_repository
+from app.utils.telegram_safe import safe_reply
 
 _MAX_ALERTS = 20
 
@@ -34,7 +35,7 @@ async def manage_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await update.message.reply_text("🔔 У вас нет активных алертов.")
             return
         lines = ["🔔 *Ваши алерты:*\n"] + [f"• {row.keyword}" for row in rows]
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        await safe_reply(update.message, "\n".join(lines))
         return
 
     keyword = " ".join(args[1:]).strip().lower()

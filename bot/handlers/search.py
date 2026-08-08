@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 from app.database import AsyncSessionLocal
 from app.repositories import favorite_repository, post_repository
 from app.services.ai_engine import generate_embedding
+from app.utils.telegram_safe import safe_reply
 from app.utils.text import truncate
 from bot.handlers.favorites import favorite_toggle_row
 
@@ -79,7 +80,7 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
                     if offset > 0
                     else f"🔍 По запросу *{query_text}* ничего не найдено."
                 )
-                await message.reply_text(text_out, parse_mode="Markdown")
+                await safe_reply(message, text_out)
                 return
 
             post_ids = [(getattr(row, "Post", None) or row).id for row in rows]
@@ -111,7 +112,7 @@ async def _run_search(user_id: int, query_text: str, category: str | None, offse
     if len(rows) == _PAGE_SIZE:
         kb_rows.append([InlineKeyboardButton("▶️ Ещё", callback_data="search_next")])
 
-    await message.reply_text(text_out, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb_rows))
+    await safe_reply(message, text_out, reply_markup=InlineKeyboardMarkup(kb_rows))
 
 
 async def _semantic_search(db, user_id: int, query: str, limit: int = _PAGE_SIZE) -> list:
