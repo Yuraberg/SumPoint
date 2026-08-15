@@ -120,7 +120,13 @@ async def answer_from_context(question: str, context: str, model: str | None = N
     return _strip_thought(response.choices[0].message.content.strip())
 
 
-DIGEST_MAX_TOKENS = 8192
+DIGEST_MAX_TOKENS = 8192  # DeepSeek's hard per-call ceiling for deepseek-chat — cannot go higher for a single completion
+
+# Posts per DeepSeek call. A full digest with more posts than this is split
+# into several calls (see generate_digest_text) instead of relying on a single
+# completion to cover everything — DIGEST_MAX_TOKENS is already DeepSeek's max,
+# so the only way to fit a larger digest is more calls, not a bigger one.
+DIGEST_BATCH_SIZE = 50
 
 
 def _trim_incomplete_tail(text: str) -> str:
@@ -131,8 +137,12 @@ def _trim_incomplete_tail(text: str) -> str:
     return text[:idx].rstrip() if idx != -1 else ""
 
 
-async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
-    """Public entry point for digest assembly — keeps callers out of ``_call``.
+def _chunk(items: list, size: int) -> list[list]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+async def _generate_digest_batch(batch: list[dict], model: str | None = None) -> str:
+    """Generate one digest section covering at most DIGEST_BATCH_SIZE posts.
 
     DeepSeek occasionally returns a 200 with empty content for large digest
     prompts (no exception, so ``_call``'s retries never kick in) — retry once
@@ -140,20 +150,14 @@ async def generate_digest_text(summaries: list[dict], model: str | None = None) 
     """
     from app.prompts.summarization import build_digest_prompt
 
-    # A post with no summary contributes nothing but bulk to the prompt, and
-    # DeepSeek just parrots it back as a bare "- Channel: " bullet with no
-    # content — drop it rather than pad the digest with empty lines. If every
-    # summary is empty (shouldn't normally happen), fall back to the original
-    # list so the digest call still has something to work with.
-    usable = [s for s in summaries if (s.get("summary") or "").strip()]
-    prompt = build_digest_prompt(usable or summaries)
+    prompt = build_digest_prompt(batch)
 
     response = await _call_raw(prompt, max_tokens=DIGEST_MAX_TOKENS, model=model)
     text = response.choices[0].message.content.strip()
     truncated = response.choices[0].finish_reason == "length"
 
     if not text.strip():
-        logger.warning("DeepSeek returned an empty digest (%d posts); retrying once", len(usable))
+        logger.warning("DeepSeek returned an empty digest batch (%d posts); retrying once", len(batch))
         response = await _call_raw(prompt, max_tokens=DIGEST_MAX_TOKENS, model=model)
         text = response.choices[0].message.content.strip()
         truncated = response.choices[0].finish_reason == "length"
@@ -164,15 +168,37 @@ async def generate_digest_text(summaries: list[dict], model: str | None = None) 
         # e.g. "- Channel: <"). Drop it and say so, instead of silently
         # shipping a digest that just stops mid-sentence.
         logger.warning(
-            "Digest generation hit the token limit (%d posts) — trimming the incomplete tail",
-            len(usable),
+            "Digest batch hit the token limit (%d posts) — trimming the incomplete tail",
+            len(batch),
         )
         text = _trim_incomplete_tail(text)
         text += (
-            "\n\n_…дайджест обрезан — слишком много постов за этот период. "
+            "\n\n_…часть дайджеста обрезана — слишком много постов в этой пачке. "
             "Попробуйте сузить временное окно или темы в настройках расписания._"
         )
     return text
+
+
+async def generate_digest_text(summaries: list[dict], model: str | None = None) -> str:
+    """Public entry point for digest assembly — keeps callers out of ``_call``.
+
+    Splits ``summaries`` into DIGEST_BATCH_SIZE-sized batches and generates
+    each with its own DeepSeek call (concurrently), then joins the results —
+    a single call is capped at DIGEST_MAX_TOKENS output tokens, so this is
+    how a digest larger than that ceiling gets fully covered instead of cut
+    off. A batch that fails even after its own retry (see
+    _generate_digest_batch) is dropped rather than failing the whole digest.
+    """
+    # A post with no summary contributes nothing but bulk to the prompt, and
+    # DeepSeek just parrots it back as a bare "- Channel: " bullet with no
+    # content — drop it rather than pad the digest with empty lines. If every
+    # summary is empty (shouldn't normally happen), fall back to the original
+    # list so the digest call still has something to work with.
+    usable = [s for s in summaries if (s.get("summary") or "").strip()]
+    batches = _chunk(usable or summaries, DIGEST_BATCH_SIZE)
+
+    parts = await asyncio.gather(*[_generate_digest_batch(b, model=model) for b in batches])
+    return "\n\n".join(p for p in parts if p.strip())
 
 
 async def classify_post(text: str) -> str:

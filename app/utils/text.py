@@ -23,3 +23,27 @@ def truncate(text: str, limit: int = DIGEST_TEXT_LIMIT) -> str:
     if cut == -1:
         cut = limit
     return text[:cut] + "\n…"
+
+
+def split_for_telegram(text: str, limit: int = DIGEST_TEXT_LIMIT) -> list[str]:
+    """Split ``text`` into Telegram-safe chunks (<= ``limit`` chars each) for
+    sending as consecutive messages — unlike ``truncate``, nothing is dropped.
+
+    Cuts on the same blank-line/newline boundaries as ``truncate`` so no chunk
+    lands mid-Markdown-entity.
+    """
+    if not text:
+        return []
+    parts = []
+    remaining = text
+    while len(remaining) > limit:
+        cut = remaining.rfind("\n\n", 0, limit)
+        if cut == -1:
+            cut = remaining.rfind("\n", 0, limit)
+        if cut == -1:
+            cut = limit
+        parts.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip("\n")
+    if remaining:
+        parts.append(remaining)
+    return parts

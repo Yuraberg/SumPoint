@@ -9,8 +9,8 @@ from app.repositories import post_repository, schedule_repository
 from app.services.calendar_service import get_upcoming_events
 from app.services.digest_delivery import format_events_message
 from app.services.digest_service import build_user_digest
-from app.utils.telegram_safe import safe_edit
-from app.utils.text import truncate
+from app.utils.telegram_safe import safe_edit, safe_send
+from app.utils.text import split_for_telegram, truncate
 
 
 async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,16 +34,21 @@ async def digest_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             )
             return
 
-    text = truncate(digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч.")
+    text = digest.get("digest_markdown") or f"Нет новых постов за последние {hours} ч."
+    parts = split_for_telegram(text) or [text]
+    total = len(parts)
 
     buttons = [[InlineKeyboardButton(cat, callback_data=f"filter_{cat}")] for cat in CATEGORIES[:5]]
     buttons.append([InlineKeyboardButton("📅 События", callback_data="events")])
 
-    await safe_edit(
-        query,
-        text,
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
+    for i, part in enumerate(parts):
+        body = f"{part}\n\n_Часть {i + 1}/{total}_" if total > 1 else part
+        is_last = i == total - 1
+        markup = InlineKeyboardMarkup(buttons) if is_last else None
+        if i == 0:
+            await safe_edit(query, body, reply_markup=markup)
+        else:
+            await safe_send(context.bot, user_id, body, reply_markup=markup)
 
 
 async def filter_by_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
