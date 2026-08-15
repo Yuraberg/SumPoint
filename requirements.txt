@@ -22,7 +22,7 @@ celery==5.4.0
 redis==5.2.0
 
 # ── Security ───────────────────────────────────────────────────────────────────
-cryptography==48.0.1
+cryptography==50.0.0
 # PyJWT (not python-jose): we only ever sign/verify HS256, and python-jose[cryptography]
 # pulls in ecdsa/pyasn1 (for algorithms we never use) with a known-unfixed CVE upstream
 # (PYSEC-2026-1325) that has no patched ecdsa release. PyJWT has no such dependency.
