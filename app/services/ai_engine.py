@@ -80,14 +80,33 @@ def _strip_thought(raw: str) -> str:
     return clean.strip()
 
 
+def _extra_body_for(model: str) -> dict | None:
+    """DeepSeek's V4 family (deepseek-v4-flash/-pro) defaults to "thinking"
+    mode, where the model's chain-of-thought (returned separately as
+    ``reasoning_content``) is drawn from the *same* max_tokens budget as the
+    visible answer — on messy input (e.g. a truncated source post) the model
+    can spend the entire budget deliberating and return empty content with
+    finish_reason "length", even for a handful of items. None of our prompts
+    (classification, summarisation, event extraction, digest assembly) need
+    multi-step reasoning, so thinking is switched off for V4 models to keep
+    the whole budget for the actual answer. Scoped to "deepseek-v4*" because
+    older DeepSeek models don't recognise the "thinking" param at all."""
+    if model.startswith("deepseek-v4"):
+        return {"thinking": {"type": "disabled"}}
+    return None
+
+
 async def _call_raw(prompt: str, max_tokens: int = MAX_TOKENS, model: str | None = None):
     """Send a prompt to DeepSeek and return the raw completion object — lets
     callers that care (e.g. the digest) inspect ``finish_reason`` instead of
     just the text, to tell a genuine answer from one cut off by max_tokens."""
+    resolved_model = model or MODEL
+    extra_body = _extra_body_for(resolved_model)
     return await _get_client().chat.completions.create(
-        model=model or MODEL,
+        model=resolved_model,
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
+        **({"extra_body": extra_body} if extra_body else {}),
     )
 
 
