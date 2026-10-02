@@ -26,7 +26,9 @@ cryptography==50.0.0
 # PyJWT (not python-jose): we only ever sign/verify HS256, and python-jose[cryptography]
 # pulls in ecdsa/pyasn1 (for algorithms we never use) with a known-unfixed CVE upstream
 # (PYSEC-2026-1325) that has no patched ecdsa release. PyJWT has no such dependency.
-PyJWT==2.13.0
+# 2.15.0: 2.13.0 carries 13 open advisories (PYSEC-2026-4140..4152) — the
+# highest fix version is 2.15.0, so that is the floor the CI audit enforces.
+PyJWT==2.15.0
 slowapi==0.1.9
 
 # ── Config ─────────────────────────────────────────────────────────────────────
