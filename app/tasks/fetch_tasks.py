@@ -2,7 +2,7 @@
 import asyncio
 import contextlib
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from telethon.errors import FloodWaitError
@@ -30,12 +30,27 @@ from app.repositories import (
 )
 from app.services.ai_engine import process_post
 from app.services.clustering import assign_cluster
+from app.services.deepseek_pricing import is_peak, next_offpeak_start
 from app.services.telegram_ingestion import TelegramIngestion
 from app.tasks.base import get_bot, run
 from app.tasks.celery_app import celery_app
 from app.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
+
+
+def _paused_for_peak(now: datetime) -> bool:
+    """Whether DeepSeek is charging peak (2x) rates right now and the pipeline
+    should wait for the cheap window (DEEPSEEK_OFFPEAK_ONLY).
+
+    Only the ingestion pipeline is gated: it is by far the biggest DeepSeek
+    consumer (three paid calls per post) and fully schedulable — a tick re-reads
+    FETCH_HISTORY_HOURS of history, so skipping up to four hours costs latency,
+    not content. The RAG assistant and on-demand digests answer a user who is
+    waiting and are never paused.
+    """
+    settings = get_settings()
+    return settings.deepseek_offpeak_only and is_peak(now, settings.deepseek_holiday_set)
 
 
 @celery_app.task(
@@ -45,9 +60,14 @@ logger = logging.getLogger(__name__)
     retry_backoff_max=300,
     max_retries=3,
 )
-def fetch_all_channels():
-    """Fetch new posts from all active channels for all users."""
-    run(_async_fetch_all())
+def fetch_all_channels(force: bool = False):
+    """Fetch new posts from all active channels for all users.
+
+    ``force=True`` — the user's explicit "Sync" button — bypasses the DeepSeek
+    off-peak pause: a click that silently does nothing for four hours reads as
+    a broken app.
+    """
+    run(_async_fetch_all(force=force))
 
 
 async def _try_acquire_fetch_lock():
@@ -66,8 +86,19 @@ async def _try_acquire_fetch_lock():
     return r
 
 
-async def _async_fetch_all():
+async def _async_fetch_all(force: bool = False):
     settings = get_settings()
+
+    if not force:
+        now = utcnow()
+        if _paused_for_peak(now):
+            logger.info(
+                "DeepSeek peak window — skipping this fetch tick; resumes at %s UTC "
+                "(the next tick re-reads the last %dh of history)",
+                next_offpeak_start(now, settings.deepseek_holiday_set).strftime("%Y-%m-%d %H:%M"),
+                FETCH_HISTORY_HOURS,
+            )
+            return
 
     lock = await _try_acquire_fetch_lock()
     if lock is None:

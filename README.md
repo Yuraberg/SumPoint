@@ -109,7 +109,35 @@ cp .env.example .env
 
 See `.env.example` for the full list, including optional ones (`SENTRY_DSN`, `UPTIME_KUMA_PUSH_URL`, digest schedule hours, fetch pacing).
 
-#### 3. Run with Docker Compose
+#### 3. Cost control: DeepSeek off-peak mode (optional)
+
+DeepSeek bills **2x during 01:00–04:00 and 06:00–10:00 UTC, Monday–Friday**
+(05:00–08:00 and 10:00–14:00 Samara) and half price at every other hour —
+including the whole weekend and Chinese public holidays
+([pricing](https://api-docs.deepseek.com/quick_start/pricing)). Set
+
+```bash
+DEEPSEEK_OFFPEAK_ONLY=true
+```
+
+and the ingestion pipeline skips its fetch ticks inside a peak window: the next
+off-peak tick re-reads the last 24 h of channel history, so no post is lost — it
+just arrives when the cheap window opens. This halves the cost of post
+processing, by far the biggest DeepSeek consumer (three paid calls per post).
+Channels' `last_fetched_at` is untouched while paused, so `/api/v1/health/fetch`
+reports `status: "paused"` (HTTP 200) instead of a false `stale` — the Uptime
+Kuma freshness monitor stays green, and a dead worker is still caught by the
+worker-heartbeat push monitor.
+
+Never paused: the web Assistant (RAG chat), an on-demand digest, and the explicit
+**Sync** button — a user is waiting on those answers. Trade-off: on a weekday
+peak window the feed can lag by up to ~4 hours.
+
+Worth pairing with it: the default `DIGEST_MORNING_HOUR=8` (12:00 Samara) sits
+*inside* a peak window — `4` (08:00 Samara) or `10`+ are half price for the same
+digest.
+
+#### 4. Run with Docker Compose
 
 ```bash
 docker compose up -d
@@ -125,7 +153,7 @@ For production, layer the hardened overrides (no source mounts, resource limits,
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-#### 4. Run locally (development, without Docker)
+#### 5. Run locally (development, without Docker)
 
 ```bash
 python -m venv .venv
@@ -307,7 +335,35 @@ cp .env.example .env
 
 Полный список, включая опциональные переменные (`SENTRY_DSN`, `UPTIME_KUMA_PUSH_URL`, часы расписания дайджестов, темп загрузки), см. в `.env.example`.
 
-#### 3. Запуск через Docker Compose
+#### 3. Экономия: режим off-peak DeepSeek (опционально)
+
+DeepSeek берёт **2x в 01:00–04:00 и 06:00–10:00 UTC по будням** (05:00–08:00 и
+10:00–14:00 по Самаре) и половину цены всё остальное время — включая все
+выходные и китайские праздники
+([прайс](https://api-docs.deepseek.com/quick_start/pricing)). Включите
+
+```bash
+DEEPSEEK_OFFPEAK_ONLY=true
+```
+
+и пайплайн перестаёт делать тики загрузки внутри дорогого окна: следующий
+дешёвый тик перечитывает последние 24 ч истории каналов, поэтому посты не
+теряются — просто приходят, когда открывается дешёвое окно. Это вдвое снижает
+стоимость обработки постов — главного потребителя DeepSeek (три платных вызова
+на пост). Пока загрузка на паузе, `/api/v1/health/fetch` отвечает
+`status: "paused"` (HTTP 200), а не ложным `stale`, — монитор актуальности в
+Uptime Kuma остаётся зелёным, а умерший воркер ловится push-монитором
+worker-heartbeat.
+
+Что никогда не ставится на паузу: веб-ассистент (RAG-чат), дайджест по
+требованию и явная кнопка **«Синхронизировать»** — там пользователь ждёт ответа.
+Минус: в дорогое окно по будням лента может отставать до ~4 часов.
+
+Что стоит сделать заодно: дефолтный `DIGEST_MORNING_HOUR=8` (12:00 по Самаре)
+попадает *внутрь* дорогого окна — `4` (08:00 по Самаре) или `10`+ стоят вдвое
+дешевле за тот же дайджест.
+
+#### 4. Запуск через Docker Compose
 
 ```bash
 docker compose up -d
@@ -323,7 +379,7 @@ docker compose up -d
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-#### 4. Локальный запуск (разработка, без Docker)
+#### 5. Локальный запуск (разработка, без Docker)
 
 ```bash
 python -m venv .venv

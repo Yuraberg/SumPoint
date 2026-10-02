@@ -26,6 +26,28 @@ class Settings(BaseSettings):
     deepseek_model: str = DEFAULT_MODEL
     deepseek_base_url: str = "https://api.deepseek.com"
 
+    # ── DeepSeek off-peak (= half price) scheduling ───────────────────────────
+    # DeepSeek charges double during 01:00-04:00 and 06:00-10:00 UTC on weekdays
+    # and half price the rest of the time (see app/services/deepseek_pricing.py).
+    # With this on, the ingestion pipeline (fetch_all_channels — the biggest
+    # DeepSeek consumer by far, three paid calls per post) skips its ticks
+    # inside a peak window and catches up on the next off-peak tick, so those
+    # calls cost half. The user's explicit "Sync" button and the interactive
+    # features (RAG assistant, on-demand digest) are never paused — someone is
+    # waiting on those.
+    deepseek_offpeak_only: bool = False
+    # Chinese public holidays (ISO dates, comma-separated), which DeepSeek bills
+    # fully off-peak — no pause needed then. Dates not listed are treated as
+    # peak, the safe direction: the pipeline only waits for a window that was
+    # already cheap.
+    deepseek_offpeak_holidays: str = ""
+
+    @property
+    def deepseek_holiday_set(self) -> frozenset[str]:
+        return frozenset(
+            x.strip() for x in self.deepseek_offpeak_holidays.split(",") if x.strip()
+        )
+
     # Ollama (embeddings)
     ollama_base_url: str = "http://172.20.0.1:11434"
 

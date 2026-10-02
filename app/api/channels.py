@@ -97,7 +97,12 @@ async def import_subscribed_channels(current_user: CurrentUser):
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def sync_subscriptions(current_user: CurrentUser):
-    """Trigger a background fetch of the user's Telegram subscriptions."""
+    """Trigger a background fetch of the user's Telegram subscriptions.
+
+    Dispatched with ``force=True``: this is an explicit user action, so it runs
+    even inside DeepSeek's peak (2x) billing window, where the automatic ticks
+    are paused (DEEPSEEK_OFFPEAK_ONLY) — see app/tasks/fetch_tasks.py.
+    """
     from app.tasks.fetch_tasks import fetch_all_channels
-    fetch_all_channels.delay()
+    fetch_all_channels.delay(force=True)
     return {"message": "Sync started"}

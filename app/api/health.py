@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.models.channel import Channel
+from app.services.deepseek_pricing import is_peak, next_offpeak_start
 from app.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -69,10 +70,22 @@ async def fetch_health_check(response: Response):
     to 2026-07-08 outage after a Docker restart left the worker wedged with no
     posts ingested for four days.
 
+    With ``DEEPSEEK_OFFPEAK_ONLY`` on, the pipeline deliberately pauses inside
+    DeepSeek's peak (2x) billing window, so a stale ``last_fetched_at`` there is
+    expected rather than a fault: the check answers ``status: "paused"`` with
+    HTTP 200 (and the instant fetching resumes) instead of a false "stale". A
+    worker that dies *during* the pause is still caught by the Uptime Kuma
+    worker-heartbeat push monitor — `uptime_kuma_heartbeat` runs on its own
+    5-minute schedule, independent of fetching.
+
     Point a separate Uptime Kuma HTTP monitor at this endpoint.
     """
     settings = get_settings()
     threshold_minutes = 2 * settings.posts_fetch_interval_minutes
+    now = utcnow()
+    paused = settings.deepseek_offpeak_only and is_peak(
+        now, settings.deepseek_holiday_set
+    )
 
     try:
         async with AsyncSessionLocal() as session:
@@ -89,6 +102,21 @@ async def fetch_health_check(response: Response):
 
     age_minutes = (utcnow() - last_fetched_at).total_seconds() / 60
     is_fresh = age_minutes <= threshold_minutes
+
+    if not is_fresh and paused:
+        # Intentional pause, not a fault — keep the monitor green and say when
+        # the pipeline picks up again.
+        return {
+            "status": "paused",
+            "detail": (
+                "DeepSeek peak billing window — automatic fetch ticks are paused "
+                "until the next off-peak window"
+            ),
+            "last_fetched_at": last_fetched_at.isoformat(),
+            "age_minutes": round(age_minutes, 1),
+            "threshold_minutes": threshold_minutes,
+            "resumes_at": next_offpeak_start(now, settings.deepseek_holiday_set).isoformat(),
+        }
 
     if not is_fresh:
         response.status_code = 503
